@@ -42,6 +42,12 @@ impl Fixed {
     }
 }
 
+impl fmt::Debug for Fixed {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(f, "{0} (= 0x{0:x}, {1})", self.0, self.to_f64())
+    }
+}
+
 pub type TableTag = Tag;
 pub type Offset32 = u32;
 pub type Offset16 = u16;
