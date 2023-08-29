@@ -1,5 +1,7 @@
 use std::{cmp::Ordering, marker::PhantomData};
 
+use crate::data_types::{Fixed, Tag};
+
 pub trait FromData: Sized {
     const SIZE: usize;
     fn parse(data: &[u8]) -> Option<Self>;
@@ -23,6 +25,29 @@ impl FromData for u32 {
     const SIZE: usize = 4;
     fn parse(data: &[u8]) -> Option<Self> {
         data.try_into().map(Self::from_be_bytes).ok()
+    }
+}
+
+impl FromData for i32 {
+    const SIZE: usize = 4;
+    fn parse(data: &[u8]) -> Option<Self> {
+        data.try_into().map(Self::from_be_bytes).ok()
+    }
+}
+
+impl FromData for Tag {
+    const SIZE: usize = 4;
+    fn parse(data: &[u8]) -> Option<Self> {
+        type T = u32;
+        T::parse(data).map(Self)
+    }
+}
+
+impl FromData for Fixed {
+    const SIZE: usize = 4;
+    fn parse(data: &[u8]) -> Option<Self> {
+        type T = i32;
+        T::parse(data).map(Self)
     }
 }
 
@@ -135,5 +160,13 @@ impl<'a> Stream<'a> {
 
     pub fn at_end(&self) -> bool {
         self.offset == self.data.len()
+    }
+
+    pub fn set_offset(&mut self, offset: usize) {
+        self.offset = offset;
+    }
+
+    pub fn tail(self) -> Option<&'a [u8]> {
+        self.data.get(self.offset..self.data.len())
     }
 }
