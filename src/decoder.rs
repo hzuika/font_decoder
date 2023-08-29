@@ -51,6 +51,43 @@ impl FromData for Fixed {
     }
 }
 
+// 実行時に要素のサイズが確定するデータの配列
+pub struct UnsizedLazyArray<'a, T, F> {
+    buffer: &'a [u8],
+    data_size: usize,
+    parse_data: F,
+    data_type: PhantomData<T>,
+}
+
+impl<'a, T, F> UnsizedLazyArray<'a, T, F> {
+    pub fn new(buffer: &'a [u8], data_size: usize, parse_data: F) -> Self {
+        Self {
+            buffer,
+            data_size,
+            parse_data,
+            data_type: PhantomData::<T>,
+        }
+    }
+
+    pub fn len(&self) -> usize {
+        self.buffer.len() / self.data_size
+    }
+}
+
+impl<'a, T, F: Fn(&'a [u8]) -> Option<T>> UnsizedLazyArray<'a, T, F> {
+    pub fn get(&self, index: usize) -> Option<T> {
+        if index < self.len() {
+            let start = index * self.data_size;
+            let end = start + self.data_size;
+            self.buffer
+                .get(start..end)
+                .and_then(|x| (self.parse_data)(x))
+        } else {
+            None
+        }
+    }
+}
+
 pub struct LazyArray<'a, T> {
     data: &'a [u8],
     data_type: PhantomData<T>,
@@ -101,6 +138,34 @@ impl<'a, T: FromData> LazyArray<'a, T> {
             } else {
                 None
             }
+        }
+    }
+}
+
+pub struct UnsizedLazyArrayIter<'a, T, F: Fn(&'a [u8]) -> Option<T>> {
+    array: &'a UnsizedLazyArray<'a, T, F>,
+    index: usize,
+}
+
+impl<'a, T, F: Fn(&'a [u8]) -> Option<T>> Iterator for UnsizedLazyArrayIter<'a, T, F> {
+    type Item = T;
+    fn next(&mut self) -> Option<Self::Item> {
+        if self.index >= self.array.len() {
+            None
+        } else {
+            self.index += 1;
+            self.array.get(self.index - 1)
+        }
+    }
+}
+
+impl<'a, T, F: Fn(&'a [u8]) -> Option<T>> IntoIterator for &'a UnsizedLazyArray<'a, T, F> {
+    type IntoIter = UnsizedLazyArrayIter<'a, T, F>;
+    type Item = T;
+    fn into_iter(self) -> Self::IntoIter {
+        UnsizedLazyArrayIter {
+            array: self,
+            index: 0,
         }
     }
 }
@@ -156,6 +221,17 @@ impl<'a> Stream<'a> {
     pub fn read_array<T: FromData>(&mut self, count: usize) -> Option<LazyArray<'a, T>> {
         let len = count * T::SIZE;
         self.read_bytes(len).map(LazyArray::new)
+    }
+
+    pub fn read_unsized_array<T, F: Fn(&'a [u8]) -> Option<T>>(
+        &mut self,
+        data_count: usize,
+        data_size: usize,
+        parse_data: F,
+    ) -> Option<UnsizedLazyArray<'a, T, F>> {
+        let len = data_count * data_size;
+        self.read_bytes(len)
+            .map(|data| UnsizedLazyArray::new(data, data_size, parse_data))
     }
 
     pub fn at_end(&self) -> bool {
