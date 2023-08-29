@@ -3,6 +3,60 @@ use crate::{
     decoder::{FromData, LazyArray, Stream},
 };
 
+pub struct TTCHeader<'a> {
+    pub ttc_tag: Tag, // Font Collection ID string: 'ttcf' (used for fonts with CFF or CFF2 outlines as well as TrueType outlines)
+    pub major_version: u16, // Major version of the TTC Header, = 1.
+    pub minor_version: u16, // Minor version of the TTC Header, = 0.
+    pub num_fonts: u32, // Number of fonts in TTC
+    pub table_directory_offsets: LazyArray<'a, Offset32>, // Array of offsets to the TableDirectory for each font from the beginning of the file
+}
+
+impl<'a> TTCHeader<'a> {
+    pub fn parse(data: &'a [u8]) -> Option<Self> {
+        let mut s = Stream::new(data);
+        let ttc_tag = s.read()?;
+        let major_version = s.read()?;
+        let minor_version = s.read()?;
+        let num_fonts = s.read()?;
+        let table_directory_offsets = s.read_array(num_fonts as usize)?;
+        Some(Self {
+            ttc_tag,
+            major_version,
+            minor_version,
+            num_fonts,
+            table_directory_offsets,
+        })
+    }
+}
+
+pub struct Collection<'a> {
+    data: &'a [u8],
+    pub header: TTCHeader<'a>,
+}
+
+impl<'a> Collection<'a> {
+    pub fn new(data: &'a [u8]) -> Option<Self> {
+        let header = TTCHeader::parse(data)?;
+        Some(Self { data, header })
+    }
+
+    pub fn get(&self, index: usize) -> Option<Table<'a>> {
+        let offset = self.header.table_directory_offsets.get(index)? as usize;
+        let table_record_data = self.data.get(offset..self.data.len())?;
+        let table_directory = TableDirectory::parse(table_record_data)?;
+        Some(Table {
+            data: self.data,
+            table_directory,
+        })
+    }
+}
+
+pub fn is_ttc(data: &[u8]) -> Option<bool> {
+    let mut s = Stream::new(data);
+    let tag: Tag = s.read()?;
+    Some(tag == Tag::from_be_bytes(*b"ttcf"))
+}
+
 #[derive(Debug)]
 pub struct TableDirectoryHeader {
     pub sfnt_version: Tag,
@@ -12,12 +66,25 @@ pub struct TableDirectoryHeader {
     pub range_shift: u16,
 }
 
+fn check_sfnt_version(sfnt_version: &Tag) {
+    const TRUETYPE: Tag = Tag(0x00010000);
+    const CFF: Tag = Tag::from_be_bytes(*b"OTTO");
+    assert!(
+        sfnt_version == &TRUETYPE || sfnt_version == &CFF,
+        "invalid sfnt version 0x{:x}",
+        sfnt_version.0
+    );
+}
+
 impl FromData for TableDirectoryHeader {
     const SIZE: usize = 4 + 2 * 4;
     fn parse(data: &[u8]) -> Option<Self> {
         let mut s = Stream::new(data);
+        let sfnt_version: Tag = s.read()?;
+        check_sfnt_version(&sfnt_version);
+
         Some(Self {
-            sfnt_version: Tag(s.read()?),
+            sfnt_version,
             num_tables: s.read()?,
             search_range: s.read()?,
             entry_selector: s.read()?,
