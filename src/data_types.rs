@@ -31,7 +31,7 @@ impl fmt::Display for Tag {
 }
 
 pub const NAME: Tag = Tag::from_be_bytes(*b"name");
-
+pub const FVAR: Tag = Tag::from_be_bytes(*b"fvar");
 // 32-bit signed fixed-point number (16.16)
 pub struct Fixed(pub i32);
 
