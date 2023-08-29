@@ -141,7 +141,9 @@ impl<'a> NameTable<'a> {
                         match id.0 {
                             0 => {
                                 // Roman is UTF8?
-                                String::from_utf8(bytes.into()).ok()
+                                let (cow, _encoding_used, _had_errors) =
+                                    encoding_rs::MACINTOSH.decode(bytes.into());
+                                Some(cow.into())
                             }
                             1 => {
                                 // Japanese is Shift JIS?
