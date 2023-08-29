@@ -12,12 +12,25 @@ pub struct TableDirectoryHeader {
     pub range_shift: u16,
 }
 
+fn check_sfnt_version(sfnt_version: &Tag) {
+    const TRUETYPE: Tag = Tag(0x00010000);
+    const CFF: Tag = Tag::from_be_bytes(*b"OTTO");
+    assert!(
+        sfnt_version == &TRUETYPE || sfnt_version == &CFF,
+        "invalid sfnt version 0x{:x}",
+        sfnt_version.0
+    );
+}
+
 impl FromData for TableDirectoryHeader {
     const SIZE: usize = 4 + 2 * 4;
     fn parse(data: &[u8]) -> Option<Self> {
         let mut s = Stream::new(data);
+        let sfnt_version: Tag = s.read()?;
+        check_sfnt_version(&sfnt_version);
+
         Some(Self {
-            sfnt_version: Tag(s.read()?),
+            sfnt_version,
             num_tables: s.read()?,
             search_range: s.read()?,
             entry_selector: s.read()?,
