@@ -1,3 +1,4 @@
+use core::fmt;
 use std::{cmp::Ordering, marker::PhantomData};
 
 use crate::data_types::{Fixed, Tag};
@@ -52,16 +53,20 @@ impl FromData for Fixed {
 }
 
 // 実行時に要素のサイズが確定するデータの配列
-pub struct UnsizedLazyArray<'a, T, F> {
+pub struct UnsizedLazyArray<'a, T> {
     buffer: &'a [u8],
     data_size: usize,
-    parse_data: F,
+    parse_data: Box<dyn Fn(&'a [u8]) -> Option<T>>,
     data_type: PhantomData<T>,
 }
 
-impl<'a, T, F> UnsizedLazyArray<'a, T, F> {
-    pub fn new(buffer: &'a [u8], data_size: usize, parse_data: F) -> Self {
-        Self {
+impl<'a, T> UnsizedLazyArray<'a, T> {
+    pub fn new(
+        buffer: &'a [u8],
+        data_size: usize,
+        parse_data: Box<dyn Fn(&'a [u8]) -> Option<T>>,
+    ) -> UnsizedLazyArray<'a, T> {
+        UnsizedLazyArray::<'a, T> {
             buffer,
             data_size,
             parse_data,
@@ -72,9 +77,7 @@ impl<'a, T, F> UnsizedLazyArray<'a, T, F> {
     pub fn len(&self) -> usize {
         self.buffer.len() / self.data_size
     }
-}
 
-impl<'a, T, F: Fn(&'a [u8]) -> Option<T>> UnsizedLazyArray<'a, T, F> {
     pub fn get(&self, index: usize) -> Option<T> {
         if index < self.len() {
             let start = index * self.data_size;
@@ -89,27 +92,27 @@ impl<'a, T, F: Fn(&'a [u8]) -> Option<T>> UnsizedLazyArray<'a, T, F> {
 }
 
 pub struct LazyArray<'a, T> {
-    data: &'a [u8],
+    buffer: &'a [u8],
     data_type: PhantomData<T>,
 }
 
 impl<'a, T: FromData> LazyArray<'a, T> {
     pub fn new(data: &'a [u8]) -> LazyArray<'a, T> {
         LazyArray {
-            data,
+            buffer: data,
             data_type: PhantomData::<T>,
         }
     }
 
     pub fn len(&self) -> usize {
-        self.data.len() / T::SIZE
+        self.buffer.len() / T::SIZE
     }
 
     pub fn get(&self, index: usize) -> Option<T> {
         if index < self.len() {
             let start = index * T::SIZE;
             let end = start + T::SIZE;
-            self.data.get(start..end).and_then(T::parse)
+            self.buffer.get(start..end).and_then(T::parse)
         } else {
             None
         }
@@ -142,12 +145,17 @@ impl<'a, T: FromData> LazyArray<'a, T> {
     }
 }
 
-pub struct UnsizedLazyArrayIter<'a, T, F: Fn(&'a [u8]) -> Option<T>> {
-    array: &'a UnsizedLazyArray<'a, T, F>,
+pub struct UnsizedLazyArrayIter<'a, 'b, T> {
+    array: &'a UnsizedLazyArray<'b, T>,
     index: usize,
 }
 
-impl<'a, T, F: Fn(&'a [u8]) -> Option<T>> Iterator for UnsizedLazyArrayIter<'a, T, F> {
+pub struct LazyArrayIter<'a, T> {
+    array: &'a LazyArray<'a, T>,
+    index: usize,
+}
+
+impl<'a, 'b, T> Iterator for UnsizedLazyArrayIter<'a, 'b, T> {
     type Item = T;
     fn next(&mut self) -> Option<Self::Item> {
         if self.index >= self.array.len() {
@@ -157,22 +165,6 @@ impl<'a, T, F: Fn(&'a [u8]) -> Option<T>> Iterator for UnsizedLazyArrayIter<'a, 
             self.array.get(self.index - 1)
         }
     }
-}
-
-impl<'a, T, F: Fn(&'a [u8]) -> Option<T>> IntoIterator for &'a UnsizedLazyArray<'a, T, F> {
-    type IntoIter = UnsizedLazyArrayIter<'a, T, F>;
-    type Item = T;
-    fn into_iter(self) -> Self::IntoIter {
-        UnsizedLazyArrayIter {
-            array: self,
-            index: 0,
-        }
-    }
-}
-
-pub struct LazyArrayIter<'a, T> {
-    array: &'a LazyArray<'a, T>,
-    index: usize,
 }
 
 impl<'a, T: FromData> Iterator for LazyArrayIter<'a, T> {
@@ -187,6 +179,17 @@ impl<'a, T: FromData> Iterator for LazyArrayIter<'a, T> {
     }
 }
 
+impl<'a, 'b, T> IntoIterator for &'a UnsizedLazyArray<'b, T> {
+    type IntoIter = UnsizedLazyArrayIter<'a, 'b, T>;
+    type Item = T;
+    fn into_iter(self) -> Self::IntoIter {
+        UnsizedLazyArrayIter {
+            array: self,
+            index: 0,
+        }
+    }
+}
+
 impl<'a, T: FromData> IntoIterator for &'a LazyArray<'a, T> {
     type IntoIter = LazyArrayIter<'a, T>;
     type Item = T;
@@ -195,6 +198,18 @@ impl<'a, T: FromData> IntoIterator for &'a LazyArray<'a, T> {
             array: self,
             index: 0,
         }
+    }
+}
+
+impl<'a, T: FromData + fmt::Debug> fmt::Debug for LazyArray<'a, T> {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.debug_list().entries(self.into_iter()).finish()
+    }
+}
+
+impl<'a, T: fmt::Debug> fmt::Debug for UnsizedLazyArray<'a, T> {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.debug_list().entries(self.into_iter()).finish()
     }
 }
 
@@ -223,12 +238,12 @@ impl<'a> Stream<'a> {
         self.read_bytes(len).map(LazyArray::new)
     }
 
-    pub fn read_unsized_array<T, F: Fn(&'a [u8]) -> Option<T>>(
+    pub fn read_unsized_array<T>(
         &mut self,
         data_count: usize,
         data_size: usize,
-        parse_data: F,
-    ) -> Option<UnsizedLazyArray<'a, T, F>> {
+        parse_data: Box<dyn Fn(&'a [u8]) -> Option<T>>,
+    ) -> Option<UnsizedLazyArray<'a, T>> {
         let len = data_count * data_size;
         self.read_bytes(len)
             .map(|data| UnsizedLazyArray::new(data, data_size, parse_data))
@@ -244,5 +259,84 @@ impl<'a> Stream<'a> {
 
     pub fn tail(self) -> Option<&'a [u8]> {
         self.data.get(self.offset..self.data.len())
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::{FromData, LazyArray, LazyArrayIter, UnsizedLazyArray, UnsizedLazyArrayIter};
+
+    #[test]
+    fn test_lazy_array() {
+        let a = [1_u8, 2, 3, 4];
+        let b = LazyArray::<u16>::new(&a);
+        let mut c = b.into_iter();
+        assert_eq!(c.next(), Some(0x0102));
+        assert_eq!(c.next(), Some(0x0304));
+        assert_eq!(c.next(), None);
+    }
+
+    #[test]
+    fn test_lazy_array_iter() {
+        let a = [1_u8, 2, 3, 4];
+        let b = LazyArray::<u16>::new(&a);
+        let mut c = LazyArrayIter {
+            array: &b,
+            index: 0,
+        };
+        assert_eq!(c.next(), Some(0x0102));
+        assert_eq!(c.next(), Some(0x0304));
+        assert_eq!(c.next(), None);
+    }
+
+    #[test]
+    fn test_unsized_lazy_array_iter() {
+        let a = [1_u8, 2, 3, 4];
+        let b = UnsizedLazyArray::<u16>::new(&a, 2, Box::new(u16::parse));
+        let mut c = UnsizedLazyArrayIter {
+            array: &b,
+            index: 0,
+        };
+        assert_eq!(c.next(), Some(0x0102));
+        assert_eq!(c.next(), Some(0x0304));
+        assert_eq!(c.next(), None);
+    }
+
+    #[test]
+    fn test_struct_with_closure() {
+        struct A {
+            _f: Box<dyn Fn()>,
+        }
+        struct B<'a> {
+            _a: &'a A,
+        }
+
+        let a = A {
+            _f: Box::new(|| {}),
+        };
+        let _b = B { _a: &a };
+
+        struct C<'a> {
+            _f: Box<dyn Fn(&'a [u8])>,
+        }
+        // need 2 lifetime annotation.
+        struct D<'a, 'b> {
+            _c: &'a C<'b>,
+        }
+        let c = C {
+            _f: Box::new(|_: &[u8]| {}),
+        };
+        let _d = D { _c: &c };
+
+        struct E;
+        struct F<'a> {
+            _e: &'a E,
+        }
+        struct G<'a> {
+            _f: &'a F<'a>,
+        }
+        let e = E;
+        let f = F { _e: &e };
+        let _g = G { _f: &f };
     }
 }
