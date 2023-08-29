@@ -56,42 +56,47 @@ impl FromData for VariationAxisRecord {
     }
 }
 
+#[derive(Debug)]
 pub struct UserTuple<'a> {
     pub coordinates: LazyArray<'a, Fixed>, // axisCount
 }
 
+#[derive(Debug)]
 pub struct InstanceRecord<'a> {
     pub subfamily_name_id: u16, // The name ID for entries in the 'name' table that provide subfamily names for this instance.
     pub flags: u16,             // Reserved for future use — set to 0.
     pub coordinates: UserTuple<'a>, // The coordinates array for this instance.
-    pub post_script_name_id: u16, // Optional. The name ID for entries in the 'name' table that provide PostScript names for this instance.
+    pub post_script_name_id: Option<u16>, // Optional. The name ID for entries in the 'name' table that provide PostScript names for this instance.
 }
 
 impl<'a> InstanceRecord<'a> {
-    pub fn parse(data: &'a [u8], instance_count: usize) -> Option<Self> {
+    pub fn parse(data: &'a [u8], axis_count: usize) -> Option<Self> {
         let mut s = Stream::new(data);
+        let subfamily_name_id = s.read()?;
+        let flags = s.read()?;
+        let coordinates = UserTuple {
+            coordinates: s.read_array(axis_count)?,
+        };
+        let post_script_name_id = s.read();
+
         Some(Self {
-            subfamily_name_id: s.read()?,
-            flags: s.read()?,
-            coordinates: UserTuple {
-                coordinates: s.read_array(instance_count)?,
-            },
-            post_script_name_id: s.read()?,
+            subfamily_name_id,
+            flags,
+            coordinates,
+            post_script_name_id,
         })
     }
 }
 
-pub struct FvarTable<'a, F> {
+pub struct FvarTable<'a> {
     pub data: &'a [u8],
     pub header: FvarTableHeader,
     pub axes: LazyArray<'a, VariationAxisRecord>,
-    pub instances: UnsizedLazyArray<'a, InstanceRecord<'a>, F>,
+    pub instances: UnsizedLazyArray<'a, InstanceRecord<'a>>,
 }
 
-impl<'a, F> FvarTable<'a, F> {
-    pub fn parse(
-        data: &'a [u8],
-    ) -> Option<FvarTable<'a, impl Fn(&'a [u8]) -> Option<InstanceRecord<'a>>>> {
+impl<'a> FvarTable<'a> {
+    pub fn parse(data: &'a [u8]) -> Option<FvarTable<'a>> {
         let mut s = Stream::new(data);
         let header: FvarTableHeader = s.read()?;
         let offset = header.axes_array_offset as usize;
@@ -99,9 +104,12 @@ impl<'a, F> FvarTable<'a, F> {
         let axes = s.read_array(header.axis_count as usize)?;
         let instance_size = header.instance_size as usize;
         let instance_count = header.instance_count as usize;
-        let instances = s.read_unsized_array(instance_count, instance_size, move |data| {
-            InstanceRecord::parse(data, instance_count)
-        })?;
+        let axis_count = header.axis_count as usize;
+        let instances = s.read_unsized_array(
+            instance_count,
+            instance_size,
+            Box::new(move |data| InstanceRecord::parse(data, axis_count)),
+        )?;
         Some(FvarTable {
             data,
             header,
