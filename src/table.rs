@@ -1,6 +1,8 @@
 use crate::{
-    data_types::{Offset32, TableTag, Tag},
+    data_types::{Offset32, TableTag, Tag, FVAR, NAME},
     decoder::{FromData, LazyArray, Stream},
+    fvar::FvarTable,
+    name::NameTable,
 };
 
 pub struct TTCHeader<'a> {
@@ -161,5 +163,17 @@ impl<'a> Table<'a> {
             offset.checked_add(length)?
         };
         self.data.get(offset..end)
+    }
+
+    pub fn get_name_table(&self) -> Option<NameTable<'a>> {
+        let data = self.get_table_data(&NAME)?;
+        let name = NameTable::parse(data);
+        name
+    }
+
+    pub fn get_fvar_table(&self) -> Option<FvarTable<'a>> {
+        let data = self.get_table_data(&FVAR)?;
+        let fvar = FvarTable::parse(data);
+        fvar
     }
 }
