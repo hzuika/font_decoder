@@ -169,3 +169,48 @@ impl<'a> NameTable<'a> {
         }
     }
 }
+
+pub struct NameTableIter<'a> {
+    table: &'a NameTable<'a>,
+    index: usize,
+}
+
+#[derive(Debug)]
+pub struct NameTableIterItem {
+    pub platform_id: PlatformID,
+    pub encoding_id: EncodingID,
+    pub language_id: LanguageID,
+    pub name_id: NameID,
+    pub name: String,
+}
+
+impl<'a> Iterator for NameTableIter<'a> {
+    type Item = NameTableIterItem;
+    fn next(&mut self) -> Option<Self::Item> {
+        if self.index < self.table.header.count as usize {
+            self.index += 1;
+            let record = self.table.name_records.get(self.index - 1)?;
+            let name = self.table.get_string(&record)?;
+            Some(Self::Item {
+                platform_id: record.platform_id,
+                encoding_id: record.encoding_id,
+                language_id: record.language_id,
+                name_id: record.name_id,
+                name,
+            })
+        } else {
+            None
+        }
+    }
+}
+
+impl<'a> IntoIterator for &'a NameTable<'a> {
+    type IntoIter = NameTableIter<'a>;
+    type Item = NameTableIterItem;
+    fn into_iter(self) -> Self::IntoIter {
+        Self::IntoIter {
+            table: self,
+            index: 0,
+        }
+    }
+}
