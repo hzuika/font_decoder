@@ -59,15 +59,6 @@ pub fn is_ttc(data: &[u8]) -> Option<bool> {
     Some(tag == Tag::from_be_bytes(*b"ttcf"))
 }
 
-#[derive(Debug)]
-pub struct TableDirectoryHeader {
-    pub sfnt_version: Tag,
-    pub num_tables: u16,
-    pub search_range: u16,
-    pub entry_selector: u16,
-    pub range_shift: u16,
-}
-
 fn check_sfnt_version(sfnt_version: &Tag) {
     const TRUETYPE: Tag = Tag(0x00010000);
     const CFF: Tag = Tag::from_be_bytes(*b"OTTO");
@@ -76,23 +67,6 @@ fn check_sfnt_version(sfnt_version: &Tag) {
         "invalid sfnt version 0x{:x}",
         sfnt_version.0
     );
-}
-
-impl FromData for TableDirectoryHeader {
-    const SIZE: usize = 4 + 2 * 4;
-    fn parse(data: &[u8]) -> Option<Self> {
-        let mut s = Stream::new(data);
-        let sfnt_version: Tag = s.read()?;
-        check_sfnt_version(&sfnt_version);
-
-        Some(Self {
-            sfnt_version,
-            num_tables: s.read()?,
-            search_range: s.read()?,
-            entry_selector: s.read()?,
-            range_shift: s.read()?,
-        })
-    }
 }
 
 #[derive(Debug)]
@@ -117,17 +91,30 @@ impl FromData for TableRecord {
 }
 
 pub struct TableDirectory<'a> {
-    pub header: TableDirectoryHeader,
+    pub sfnt_version: Tag,
+    pub num_tables: u16,
+    pub search_range: u16,
+    pub entry_selector: u16,
+    pub range_shift: u16,
     pub table_records: LazyArray<'a, TableRecord>,
 }
 
 impl<'a> TableDirectory<'a> {
     pub fn parse(data: &'a [u8]) -> Option<Self> {
         let mut s = Stream::new(data);
-        let header: TableDirectoryHeader = s.read()?;
-        let table_records = s.read_array(header.num_tables as usize)?;
+        let sfnt_version: Tag = s.read()?;
+        check_sfnt_version(&sfnt_version);
+        let num_tables = s.read()?;
+        let search_range = s.read()?;
+        let entry_selector = s.read()?;
+        let range_shift = s.read()?;
+        let table_records = s.read_array(num_tables as usize)?;
         Some(Self {
-            header,
+            sfnt_version,
+            num_tables,
+            search_range,
+            entry_selector,
+            range_shift,
             table_records,
         })
     }
