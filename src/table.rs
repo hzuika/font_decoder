@@ -1,8 +1,9 @@
 use crate::{
-    data_types::{Offset32, TableTag, Tag, FVAR, NAME},
+    data_types::{Offset32, TableTag, Tag, FVAR, NAME, STAT},
     decoder::{FromData, LazyArray, Stream},
     fvar::FvarTable,
     name::NameTable,
+    stat::StatTable,
 };
 
 #[allow(non_snake_case)]
@@ -165,5 +166,11 @@ impl<'a> Table<'a> {
         let data = self.get_table_data(&FVAR)?;
         let fvar = FvarTable::parse(data);
         fvar
+    }
+
+    pub fn get_stat_table(&self) -> Option<StatTable<'a>> {
+        let data = self.get_table_data(&STAT)?;
+        let stat = StatTable::parse(data);
+        stat
     }
 }
