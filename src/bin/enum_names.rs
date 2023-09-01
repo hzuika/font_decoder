@@ -26,7 +26,7 @@ fn main() {
 
         if is_ttc(&buffer).unwrap() {
             let collection = Collection::new(&buffer).unwrap();
-            for i in 0..collection.header.num_fonts as usize {
+            for i in 0..collection.header.numFonts as usize {
                 callback(&collection.get(i).unwrap())
             }
         } else {

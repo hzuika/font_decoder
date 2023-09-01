@@ -5,12 +5,13 @@ use crate::{
     name::NameTable,
 };
 
+#[allow(non_snake_case)]
 pub struct TTCHeader<'a> {
-    pub ttc_tag: Tag, // Font Collection ID string: 'ttcf' (used for fonts with CFF or CFF2 outlines as well as TrueType outlines)
-    pub major_version: u16, // Major version of the TTC Header, = 1.
-    pub minor_version: u16, // Minor version of the TTC Header, = 0.
-    pub num_fonts: u32, // Number of fonts in TTC
-    pub table_directory_offsets: LazyArray<'a, Offset32>, // Array of offsets to the TableDirectory for each font from the beginning of the file
+    pub ttcTag: Tag, // Font Collection ID string: 'ttcf' (used for fonts with CFF or CFF2 outlines as well as TrueType outlines)
+    pub majorVersion: u16, // Major version of the TTC Header, = 1.
+    pub minorVersion: u16, // Minor version of the TTC Header, = 0.
+    pub numFonts: u32, // Number of fonts in TTC
+    pub tableDirectoryOffsets: LazyArray<'a, Offset32>, // Array of offsets to the TableDirectory for each font from the beginning of the file
 }
 
 impl<'a> TTCHeader<'a> {
@@ -22,11 +23,11 @@ impl<'a> TTCHeader<'a> {
         let num_fonts = s.read()?;
         let table_directory_offsets = s.read_array(num_fonts as usize)?;
         Some(Self {
-            ttc_tag,
-            major_version,
-            minor_version,
-            num_fonts,
-            table_directory_offsets,
+            ttcTag: ttc_tag,
+            majorVersion: major_version,
+            minorVersion: minor_version,
+            numFonts: num_fonts,
+            tableDirectoryOffsets: table_directory_offsets,
         })
     }
 }
@@ -43,7 +44,7 @@ impl<'a> Collection<'a> {
     }
 
     pub fn get(&self, index: usize) -> Option<Table<'a>> {
-        let offset = self.header.table_directory_offsets.get(index)? as usize;
+        let offset = self.header.tableDirectoryOffsets.get(index)? as usize;
         let table_record_data = self.data.get(offset..self.data.len())?;
         let table_directory = TableDirectory::parse(table_record_data)?;
         Some(Table {
@@ -69,9 +70,10 @@ fn check_sfnt_version(sfnt_version: &Tag) {
     );
 }
 
+#[allow(non_snake_case)]
 #[derive(Debug)]
 pub struct TableRecord {
-    pub table_tag: TableTag,
+    pub tableTag: TableTag,
     pub checksum: u32,
     pub offset: Offset32,
     pub length: u32,
@@ -82,7 +84,7 @@ impl FromData for TableRecord {
     fn parse(data: &[u8]) -> Option<Self> {
         let mut s = Stream::new(data);
         Some(Self {
-            table_tag: Tag(s.read()?),
+            tableTag: Tag(s.read()?),
             checksum: s.read()?,
             offset: s.read()?,
             length: s.read()?,
@@ -90,13 +92,14 @@ impl FromData for TableRecord {
     }
 }
 
+#[allow(non_snake_case)]
 pub struct TableDirectory<'a> {
-    pub sfnt_version: Tag,
-    pub num_tables: u16,
-    pub search_range: u16,
-    pub entry_selector: u16,
-    pub range_shift: u16,
-    pub table_records: LazyArray<'a, TableRecord>,
+    pub sfntVersion: Tag,
+    pub numTables: u16,
+    pub searchRange: u16,
+    pub entrySelector: u16,
+    pub rangeShift: u16,
+    pub tableRecords: LazyArray<'a, TableRecord>,
 }
 
 impl<'a> TableDirectory<'a> {
@@ -110,12 +113,12 @@ impl<'a> TableDirectory<'a> {
         let range_shift = s.read()?;
         let table_records = s.read_array(num_tables as usize)?;
         Some(Self {
-            sfnt_version,
-            num_tables,
-            search_range,
-            entry_selector,
-            range_shift,
-            table_records,
+            sfntVersion: sfnt_version,
+            numTables: num_tables,
+            searchRange: search_range,
+            entrySelector: entry_selector,
+            rangeShift: range_shift,
+            tableRecords: table_records,
         })
     }
 }
@@ -137,8 +140,8 @@ impl<'a> Table<'a> {
     pub fn get_table_record(&self, tag: &Tag) -> Option<TableRecord> {
         let (_, table_record) = self
             .table_directory
-            .table_records
-            .binary_search_by(|record| record.table_tag.cmp(tag))?;
+            .tableRecords
+            .binary_search_by(|record| record.tableTag.cmp(tag))?;
         Some(table_record)
     }
 
