@@ -152,7 +152,8 @@ impl<'a> NameTable<'a> {
                                 Some(cow.into())
                             }
                             _ => {
-                                todo!()
+                                // TODO
+                                Some("not implemented".to_owned())
                             }
                         }
                     }
@@ -170,8 +171,8 @@ impl<'a> NameTable<'a> {
     }
 }
 
-pub struct NameTableIter<'a> {
-    table: &'a NameTable<'a>,
+pub struct NameTableIter<'a, 'b> {
+    table: &'a NameTable<'b>,
     index: usize,
 }
 
@@ -184,7 +185,7 @@ pub struct NameTableIterItem {
     pub name: String,
 }
 
-impl<'a> Iterator for NameTableIter<'a> {
+impl<'a, 'b> Iterator for NameTableIter<'a, 'b> {
     type Item = NameTableIterItem;
     fn next(&mut self) -> Option<Self::Item> {
         if self.index < self.table.header.count as usize {
@@ -204,8 +205,8 @@ impl<'a> Iterator for NameTableIter<'a> {
     }
 }
 
-impl<'a> IntoIterator for &'a NameTable<'a> {
-    type IntoIter = NameTableIter<'a>;
+impl<'a, 'b> IntoIterator for &'a NameTable<'b> {
+    type IntoIter = NameTableIter<'a, 'b>;
     type Item = NameTableIterItem;
     fn into_iter(self) -> Self::IntoIter {
         Self::IntoIter {
