@@ -9,7 +9,7 @@ use font_decoder::{
 fn callback(table: &Table) {
     let name = table.get_table_data(&NAME).unwrap();
     let name = NameTable::parse(name).unwrap();
-    for record in &name.name_records {
+    for record in &name.nameRecords {
         dbg!(&record);
         let string = name.get_string(&record);
         dbg!(&string);

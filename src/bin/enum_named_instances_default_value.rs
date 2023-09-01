@@ -17,7 +17,7 @@ fn callback(table: &Table) -> Option<()> {
     for instance in &fvar.instances {
         let mut it = names.iter();
         loop {
-            let name = it.find(|x| x.name_id.0 == instance.subfamilyNameId);
+            let name = it.find(|x| x.nameId.0 == instance.subfamilyNameId);
             if let Some(name) = name {
                 dbg!(&name.name);
                 break;

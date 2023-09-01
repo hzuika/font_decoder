@@ -13,7 +13,7 @@ fn callback(table: &Table) -> Option<()> {
         dbg!(axis.axisTag);
         let mut it = names.iter();
         loop {
-            let name = it.find(|x| x.name_id.0 == axis.axisNameId);
+            let name = it.find(|x| x.nameId.0 == axis.axisNameId);
             if let Some(name) = name {
                 dbg!(&name.name);
             } else {

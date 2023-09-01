@@ -7,10 +7,11 @@ use crate::{
     id::{EncodingID, LanguageID, NameID, PlatformID},
 };
 
+#[allow(non_snake_case)]
 pub struct NameTableHeader {
     pub version: u16,
     pub count: u16,
-    pub storage_offset: Offset16,
+    pub storageOffset: Offset16,
 }
 
 impl FromData for NameTableHeader {
@@ -20,19 +21,20 @@ impl FromData for NameTableHeader {
         Some(Self {
             version: s.read()?,
             count: s.read()?,
-            storage_offset: s.read()?,
+            storageOffset: s.read()?,
         })
     }
 }
 
+#[allow(non_snake_case)]
 #[derive(Debug)]
 pub struct NameRecord {
-    pub platform_id: PlatformID,
-    pub encoding_id: EncodingID,
-    pub language_id: LanguageID,
-    pub name_id: NameID,
+    pub platformId: PlatformID,
+    pub encodingId: EncodingID,
+    pub languageId: LanguageID,
+    pub nameId: NameID,
     pub length: u16,
-    pub string_offset: Offset16,
+    pub stringOffset: Offset16,
 }
 
 impl FromData for NameRecord {
@@ -41,12 +43,12 @@ impl FromData for NameRecord {
         let mut s = Stream::new(data);
         let platform_id = s.read()?;
         Some(Self {
-            platform_id: PlatformID::new(platform_id),
-            encoding_id: EncodingID::new(s.read()?, platform_id),
-            language_id: LanguageID::new(s.read()?, platform_id),
-            name_id: NameID(s.read()?),
+            platformId: PlatformID::new(platform_id),
+            encodingId: EncodingID::new(s.read()?, platform_id),
+            languageId: LanguageID::new(s.read()?, platform_id),
+            nameId: NameID(s.read()?),
             length: s.read()?,
-            string_offset: s.read()?,
+            stringOffset: s.read()?,
         })
     }
 }
@@ -56,14 +58,15 @@ impl fmt::Display for NameRecord {
         write!(
             f,
             "Platform: {}, Encoding: {}, Language: {}, Name: {}",
-            self.platform_id, self.encoding_id, self.language_id, self.name_id
+            self.platformId, self.encodingId, self.languageId, self.nameId
         )
     }
 }
 
+#[allow(non_snake_case)]
 pub struct LangTagRecord {
     pub length: u16,
-    pub lang_tag_offset: Offset16,
+    pub langTagOffset: Offset16,
 }
 
 impl FromData for LangTagRecord {
@@ -72,16 +75,17 @@ impl FromData for LangTagRecord {
         let mut s = Stream::new(data);
         Some(Self {
             length: s.read()?,
-            lang_tag_offset: s.read()?,
+            langTagOffset: s.read()?,
         })
     }
 }
 
+#[allow(non_snake_case)]
 pub struct NameTable<'a> {
     pub header: NameTableHeader,
-    pub name_records: LazyArray<'a, NameRecord>,
-    pub lang_tag_count: u16,
-    pub lang_tag_records: LazyArray<'a, LangTagRecord>,
+    pub nameRecords: LazyArray<'a, NameRecord>,
+    pub langTagCount: u16,
+    pub langTagRecords: LazyArray<'a, LangTagRecord>,
     pub storage: &'a [u8],
 }
 
@@ -94,13 +98,13 @@ impl<'a> NameTable<'a> {
                 let name_records = s.read_array(header.count as usize)?;
                 let lang_tag_count = 0;
                 let lang_tag_records = LazyArray::new(&[]);
-                let storage = data.get(header.storage_offset as usize..data.len())?;
+                let storage = data.get(header.storageOffset as usize..data.len())?;
                 assert_ne!(storage.len(), 0);
                 Some(Self {
                     header,
-                    lang_tag_count,
-                    lang_tag_records,
-                    name_records,
+                    langTagCount: lang_tag_count,
+                    langTagRecords: lang_tag_records,
+                    nameRecords: name_records,
                     storage,
                 })
             }
@@ -108,13 +112,13 @@ impl<'a> NameTable<'a> {
                 let name_records = s.read_array(header.count as usize)?;
                 let lang_tag_count = s.read()?;
                 let lang_tag_records = s.read_array(lang_tag_count as usize)?;
-                let storage = data.get(header.storage_offset as usize..data.len())?;
+                let storage = data.get(header.storageOffset as usize..data.len())?;
                 assert_ne!(storage.len(), 0);
                 Some(Self {
                     header,
-                    lang_tag_count,
-                    lang_tag_records,
-                    name_records,
+                    langTagCount: lang_tag_count,
+                    langTagRecords: lang_tag_records,
+                    nameRecords: name_records,
                     storage,
                 })
             }
@@ -125,10 +129,10 @@ impl<'a> NameTable<'a> {
     }
 
     pub fn get_string(&self, record: &NameRecord) -> Option<String> {
-        let offset = record.string_offset as usize;
+        let offset = record.stringOffset as usize;
         let length = record.length as usize;
         let bytes = self.storage.get(offset..offset + length)?;
-        match record.platform_id {
+        match record.platformId {
             PlatformID::Unicode(_) => {
                 // UTF16 BE
                 let bytes: Vec<u16> = LazyArray::new(bytes).into_iter().collect();
@@ -136,7 +140,7 @@ impl<'a> NameTable<'a> {
             }
             PlatformID::Mac(_) => {
                 //
-                match &record.encoding_id {
+                match &record.encodingId {
                     EncodingID::Mac(id) => {
                         match id.0 {
                             0 => {
@@ -176,12 +180,13 @@ pub struct NameTableIter<'a, 'b> {
     index: usize,
 }
 
+#[allow(non_snake_case)]
 #[derive(Debug)]
 pub struct NameTableIterItem {
-    pub platform_id: PlatformID,
-    pub encoding_id: EncodingID,
-    pub language_id: LanguageID,
-    pub name_id: NameID,
+    pub platformId: PlatformID,
+    pub encodingId: EncodingID,
+    pub languageId: LanguageID,
+    pub nameId: NameID,
     pub name: String,
 }
 
@@ -190,13 +195,13 @@ impl<'a, 'b> Iterator for NameTableIter<'a, 'b> {
     fn next(&mut self) -> Option<Self::Item> {
         if self.index < self.table.header.count as usize {
             self.index += 1;
-            let record = self.table.name_records.get(self.index - 1)?;
+            let record = self.table.nameRecords.get(self.index - 1)?;
             let name = self.table.get_string(&record)?;
             Some(Self::Item {
-                platform_id: record.platform_id,
-                encoding_id: record.encoding_id,
-                language_id: record.language_id,
-                name_id: record.name_id,
+                platformId: record.platformId,
+                encodingId: record.encodingId,
+                languageId: record.languageId,
+                nameId: record.nameId,
                 name,
             })
         } else {
