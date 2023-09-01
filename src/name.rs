@@ -153,6 +153,30 @@ impl<'a> NameTable<'a> {
             }
         }
     }
+
+    pub fn get_strings_by_name_id(&self, name_id: NameID) -> Vec<LocalizedString> {
+        let mut v = vec![];
+        for name_record in self.nameRecords.into_iter().filter(|x| x.nameId == name_id) {
+            let string = self.get_string(&name_record).unwrap();
+            v.push(LocalizedString {
+                string,
+                locale: name_record.languageId.to_string(),
+            })
+        }
+        v
+    }
+}
+
+#[derive(Debug)]
+pub struct LocalizedString {
+    pub string: String,
+    pub locale: String,
+}
+
+impl fmt::Display for LocalizedString {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(f, "{} ({})", self.string, self.locale)
+    }
 }
 
 pub struct NameTableIter<'a, 'b> {

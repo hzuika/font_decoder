@@ -597,6 +597,7 @@ impl fmt::Display for WinLanguageID {
     }
 }
 
+#[derive(PartialEq, Clone, Copy, Hash)]
 pub struct NameID(pub u16);
 impl NameID {
     pub fn to_name(&self) -> &'static str {
