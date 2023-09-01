@@ -1,14 +1,25 @@
 use std::{fs::File, io::Read};
 
-use font_decoder::{data_types::FVAR, fvar::FvarTable, table::Table};
+use font_decoder::{data_types::FVAR, fvar::FvarTable, id::NameID, table::Table};
 
 fn callback(table: &Table) {
     let fvar = table.get_table_data(&FVAR);
+    let name = table.get_name_table().unwrap();
     match fvar {
         Some(fvar) => {
             let fvar = FvarTable::parse(fvar).unwrap();
-            dbg!(fvar.axes);
-            dbg!(fvar.instances);
+            for (i, axis) in fvar.axes.into_iter().enumerate() {
+                dbg!(i, &axis);
+                for string in name.get_strings_by_name_id(NameID(axis.axisNameId)) {
+                    println!("{}", string);
+                }
+            }
+            for (i, instance) in fvar.instances.into_iter().enumerate() {
+                dbg!(i, &instance);
+                for string in name.get_strings_by_name_id(NameID(instance.subfamilyNameId)) {
+                    println!("{}", string);
+                }
+            }
         }
         None => {}
     }
