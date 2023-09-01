@@ -8,25 +8,6 @@ use crate::{
 };
 
 #[allow(non_snake_case)]
-pub struct NameTableHeader {
-    pub version: u16,
-    pub count: u16,
-    pub storageOffset: Offset16,
-}
-
-impl FromData for NameTableHeader {
-    const SIZE: usize = 6;
-    fn parse(data: &[u8]) -> Option<Self> {
-        let mut s = Stream::new(data);
-        Some(Self {
-            version: s.read()?,
-            count: s.read()?,
-            storageOffset: s.read()?,
-        })
-    }
-}
-
-#[allow(non_snake_case)]
 #[derive(Debug)]
 pub struct NameRecord {
     pub platformId: PlatformID,
@@ -82,7 +63,9 @@ impl FromData for LangTagRecord {
 
 #[allow(non_snake_case)]
 pub struct NameTable<'a> {
-    pub header: NameTableHeader,
+    pub version: u16,
+    pub count: u16,
+    pub storageOffset: Offset16,
     pub nameRecords: LazyArray<'a, NameRecord>,
     pub langTagCount: u16,
     pub langTagRecords: LazyArray<'a, LangTagRecord>,
@@ -92,40 +75,37 @@ pub struct NameTable<'a> {
 impl<'a> NameTable<'a> {
     pub fn parse(data: &'a [u8]) -> Option<Self> {
         let mut s = Stream::new(data);
-        let header: NameTableHeader = s.read()?;
-        match header.version {
+        let version = s.read()?;
+        let count = s.read()?;
+        let storage_offset = s.read()?;
+        let name_records = s.read_array(count as usize)?;
+        let (lang_tag_count, lang_tag_records) = match version {
             0 => {
-                let name_records = s.read_array(header.count as usize)?;
                 let lang_tag_count = 0;
                 let lang_tag_records = LazyArray::new(&[]);
-                let storage = data.get(header.storageOffset as usize..data.len())?;
-                assert_ne!(storage.len(), 0);
-                Some(Self {
-                    header,
-                    langTagCount: lang_tag_count,
-                    langTagRecords: lang_tag_records,
-                    nameRecords: name_records,
-                    storage,
-                })
+                (lang_tag_count, lang_tag_records)
             }
             1 => {
-                let name_records = s.read_array(header.count as usize)?;
                 let lang_tag_count = s.read()?;
                 let lang_tag_records = s.read_array(lang_tag_count as usize)?;
-                let storage = data.get(header.storageOffset as usize..data.len())?;
-                assert_ne!(storage.len(), 0);
-                Some(Self {
-                    header,
-                    langTagCount: lang_tag_count,
-                    langTagRecords: lang_tag_records,
-                    nameRecords: name_records,
-                    storage,
-                })
+                (lang_tag_count, lang_tag_records)
             }
             _ => {
-                panic!("invalid name table version {}", header.version);
+                panic!("invalid name table version {}", version);
             }
-        }
+        };
+
+        let storage = data.get(storage_offset as usize..data.len())?;
+        assert_ne!(storage.len(), 0);
+        Some(Self {
+            version,
+            count,
+            storageOffset: storage_offset,
+            nameRecords: name_records,
+            langTagCount: lang_tag_count,
+            langTagRecords: lang_tag_records,
+            storage,
+        })
     }
 
     pub fn get_string(&self, record: &NameRecord) -> Option<String> {
@@ -193,7 +173,7 @@ pub struct NameTableIterItem {
 impl<'a, 'b> Iterator for NameTableIter<'a, 'b> {
     type Item = NameTableIterItem;
     fn next(&mut self) -> Option<Self::Item> {
-        if self.index < self.table.header.count as usize {
+        if self.index < self.table.count as usize {
             self.index += 1;
             let record = self.table.nameRecords.get(self.index - 1)?;
             let name = self.table.get_string(&record)?;
