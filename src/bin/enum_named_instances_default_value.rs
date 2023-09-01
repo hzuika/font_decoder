@@ -13,11 +13,11 @@ fn callback(table: &Table) -> Option<()> {
     let fvar = table.get_fvar_table()?;
     let into_iter = fvar.axes.into_iter();
     let default_values: Vec<(Fixed, Tag)> =
-        into_iter.map(|x| (x.default_value, x.axis_tag)).collect();
+        into_iter.map(|x| (x.defaultValue, x.axisTag)).collect();
     for instance in &fvar.instances {
         let mut it = names.iter();
         loop {
-            let name = it.find(|x| x.name_id.0 == instance.subfamily_name_id);
+            let name = it.find(|x| x.name_id.0 == instance.subfamilyNameId);
             if let Some(name) = name {
                 dbg!(&name.name);
                 break;

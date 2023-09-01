@@ -10,7 +10,7 @@ fn callback(table: &Table) -> Option<()> {
         dbg!(&instance);
         let mut it = names.iter();
         loop {
-            let name = it.find(|x| x.name_id.0 == instance.subfamily_name_id);
+            let name = it.find(|x| x.name_id.0 == instance.subfamilyNameId);
             if let Some(name) = name {
                 dbg!(name);
             } else {

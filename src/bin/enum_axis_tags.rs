@@ -10,10 +10,10 @@ fn callback(table: &Table) -> Option<()> {
     let names: Vec<NameTableIterItem> = table.get_name_table()?.into_iter().collect();
     for (i, axis) in (&fvar.axes).into_iter().enumerate() {
         dbg!(i);
-        dbg!(axis.axis_tag);
+        dbg!(axis.axisTag);
         let mut it = names.iter();
         loop {
-            let name = it.find(|x| x.name_id.0 == axis.axis_name_id);
+            let name = it.find(|x| x.name_id.0 == axis.axisNameId);
             if let Some(name) = name {
                 dbg!(&name.name);
             } else {
