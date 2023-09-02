@@ -4,7 +4,7 @@ use crate::{
 };
 
 #[allow(non_snake_case)]
-pub struct FvarTableHeader {
+pub struct FvarHeader {
     pub majorVersion: u16, // Major version number of the font variations table — set to 1.
     pub minorVersion: u16, //Minor version number of the font variations table — set to 0.
     pub axesArrayOffset: Offset16, //Offset in bytes from the beginning of the table to the start of the VariationAxisRecord array.
@@ -15,7 +15,7 @@ pub struct FvarTableHeader {
     pub instanceSize: u16, //The size in bytes of each InstanceRecord — set to either axisCount * sizeof(Fixed) + 4, or to axisCount * sizeof(Fixed) + 6.
 }
 
-impl FromData for FvarTableHeader {
+impl FromData for FvarHeader {
     const SIZE: usize = 2 * 8;
     fn parse(data: &[u8]) -> Option<Self> {
         let mut s = Stream::new(data);
@@ -93,7 +93,7 @@ impl<'a> InstanceRecord<'a> {
 
 pub struct FvarTable<'a> {
     pub data: &'a [u8],
-    pub header: FvarTableHeader,
+    pub header: FvarHeader,
     pub axes: LazyArray<'a, VariationAxisRecord>,
     pub instances: UnsizedLazyArray<'a, InstanceRecord<'a>>,
 }
@@ -101,7 +101,7 @@ pub struct FvarTable<'a> {
 impl<'a> FvarTable<'a> {
     pub fn parse(data: &'a [u8]) -> Option<FvarTable<'a>> {
         let mut s = Stream::new(data);
-        let header: FvarTableHeader = s.read()?;
+        let header: FvarHeader = s.read()?;
         let offset = header.axesArrayOffset as usize;
         s.set_offset(offset);
         let axes = s.read_array(header.axisCount as usize)?;
