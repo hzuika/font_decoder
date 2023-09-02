@@ -29,6 +29,13 @@ impl FromData for u32 {
     }
 }
 
+impl FromData for i16 {
+    const SIZE: usize = 2;
+    fn parse(data: &[u8]) -> Option<Self> {
+        data.try_into().map(Self::from_be_bytes).ok()
+    }
+}
+
 impl FromData for i32 {
     const SIZE: usize = 4;
     fn parse(data: &[u8]) -> Option<Self> {
@@ -255,6 +262,11 @@ impl<'a> Stream<'a> {
 
     pub fn set_offset(&mut self, offset: usize) {
         self.offset = offset;
+    }
+
+    pub fn set_len(&mut self, len: usize) -> Option<()> {
+        self.data = self.data.get(0..len)?;
+        Some(())
     }
 
     pub fn tail(self) -> Option<&'a [u8]> {

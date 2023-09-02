@@ -1,5 +1,6 @@
 use crate::{
-    data_types::{Offset32, TableTag, Tag, FVAR, NAME, STAT},
+    cmap::CmapTable,
+    data_types::{Offset32, TableTag, Tag, CMAP, FVAR, NAME, STAT},
     decoder::{FromData, LazyArray, Stream},
     fvar::FvarTable,
     name::NameTable,
@@ -172,5 +173,11 @@ impl<'a> Table<'a> {
         let data = self.get_table_data(&STAT)?;
         let stat = StatTable::parse(data);
         stat
+    }
+
+    pub fn get_cmap_table(&self) -> Option<CmapTable<'a>> {
+        let data = self.get_table_data(&CMAP)?;
+        let cmap = CmapTable::parse(data);
+        cmap
     }
 }

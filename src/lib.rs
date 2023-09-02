@@ -1,3 +1,4 @@
+pub mod cmap;
 pub mod data_types;
 pub mod decoder;
 pub mod fvar;
