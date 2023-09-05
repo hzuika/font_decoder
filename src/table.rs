@@ -1,9 +1,10 @@
 use crate::{
     cmap::CmapTable,
-    data_types::{Offset32, TableTag, Tag, CMAP, FVAR, NAME, STAT},
+    data_types::{Offset32, TableTag, Tag, CMAP, FVAR, NAME, OS_2, STAT},
     decoder::{FromData, LazyArray, Stream},
     fvar::FvarTable,
     name::NameTable,
+    os_2::OS2Table,
     stat::StatTable,
 };
 
@@ -179,5 +180,11 @@ impl<'a> Table<'a> {
         let data = self.get_table_data(&CMAP)?;
         let cmap = CmapTable::parse(data);
         cmap
+    }
+
+    pub fn get_os2_table(&self) -> Option<OS2Table> {
+        let data = self.get_table_data(&OS_2)?;
+        let os2 = OS2Table::parse(data);
+        os2
     }
 }
