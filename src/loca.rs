@@ -12,15 +12,15 @@ pub enum LocaTable<'a> {
 }
 
 impl<'a> LocaTable<'a> {
-    pub fn parse(data: &'a [u8], format: LocaOffsetFormat, num_glyphs: usize) -> Option<Self> {
+    pub fn parse(data: &'a [u8], format: LocaOffsetFormat, num_glyphs: u16) -> Option<Self> {
         let mut s = Stream::new(data);
         match format {
             LocaOffsetFormat::Offset16 => {
-                let offsets = s.read_array(num_glyphs + 1)?;
+                let offsets = s.read_array(num_glyphs as usize + 1)?;
                 Some(Self::Short(offsets))
             }
             LocaOffsetFormat::Offset32 => {
-                let offsets = s.read_array(num_glyphs + 1)?;
+                let offsets = s.read_array(num_glyphs as usize + 1)?;
                 Some(Self::Long(offsets))
             }
         }
