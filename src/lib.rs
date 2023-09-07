@@ -4,6 +4,7 @@ pub mod decoder;
 pub mod fvar;
 pub mod head;
 pub mod id;
+pub mod maxp;
 pub mod name;
 pub mod os_2;
 pub mod stat;
