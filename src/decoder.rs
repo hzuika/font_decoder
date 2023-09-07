@@ -1,7 +1,7 @@
 use core::fmt;
 use std::{cmp::Ordering, marker::PhantomData};
 
-use crate::data_types::{Fixed, Tag, LONGDATETIME};
+use crate::data_types::{Fixed, Tag, Version16Dot16, LONGDATETIME};
 
 pub trait FromData: Sized {
     const SIZE: usize;
@@ -70,6 +70,14 @@ impl FromData for LONGDATETIME {
     const SIZE: usize = 8;
     fn parse(data: &[u8]) -> Option<Self> {
         type T = i64;
+        T::parse(data).map(Self)
+    }
+}
+
+impl FromData for Version16Dot16 {
+    const SIZE: usize = u32::SIZE;
+    fn parse(data: &[u8]) -> Option<Self> {
+        type T = u32;
         T::parse(data).map(Self)
     }
 }
