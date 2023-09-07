@@ -26,6 +26,11 @@ impl MaxpTable {
             version1,
         })
     }
+
+    #[inline]
+    pub fn get_number_of_glyphs(&self) -> u16 {
+        self.numGlyphs
+    }
 }
 
 #[allow(non_snake_case)]
