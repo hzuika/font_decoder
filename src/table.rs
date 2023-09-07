@@ -1,8 +1,11 @@
 use crate::{
     cmap::CmapTable,
-    data_types::{Offset32, TableTag, Tag, CMAP, FVAR, NAME, OS_2, STAT},
+    data_types::{Offset32, TableTag, Tag, CMAP, FVAR, HEAD, LOCA, MAXP, NAME, OS_2, STAT},
     decoder::{FromData, LazyArray, Stream},
     fvar::FvarTable,
+    head::{HeadTable, LocaOffsetFormat},
+    loca::LocaTable,
+    maxp::MaxpTable,
     name::NameTable,
     os_2::OS2Table,
     stat::StatTable,
@@ -186,5 +189,22 @@ impl<'a> Table<'a> {
         let data = self.get_table_data(&OS_2)?;
         let os2 = OS2Table::parse(data);
         os2
+    }
+
+    pub fn get_head_table(&self) -> Option<HeadTable> {
+        self.get_table_data(&HEAD).and_then(HeadTable::parse)
+    }
+
+    pub fn get_maxp_table(&self) -> Option<MaxpTable> {
+        self.get_table_data(&MAXP).and_then(MaxpTable::parse)
+    }
+
+    pub fn get_loca_table(
+        &self,
+        format: LocaOffsetFormat,
+        num_glyphs: u16,
+    ) -> Option<LocaTable<'a>> {
+        self.get_table_data(&LOCA)
+            .and_then(|data| LocaTable::parse(data, format, num_glyphs))
     }
 }

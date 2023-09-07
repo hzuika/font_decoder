@@ -35,6 +35,9 @@ pub const FVAR: Tag = Tag::from_be_bytes(*b"fvar");
 pub const STAT: Tag = Tag::from_be_bytes(*b"STAT");
 pub const CMAP: Tag = Tag::from_be_bytes(*b"cmap");
 pub const OS_2: Tag = Tag::from_be_bytes(*b"OS/2");
+pub const LOCA: Tag = Tag::from_be_bytes(*b"loca");
+pub const HEAD: Tag = Tag::from_be_bytes(*b"head");
+pub const MAXP: Tag = Tag::from_be_bytes(*b"maxp");
 // 32-bit signed fixed-point number (16.16)
 #[derive(PartialEq)]
 pub struct Fixed(pub i32);
