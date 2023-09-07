@@ -121,6 +121,8 @@ impl<'a, T> UnsizedLazyArray<'a, T> {
     }
 }
 
+// スライスのラッパーなので，ファットポインタ分のサイズしか持たない．
+#[derive(Clone, Copy)]
 pub struct LazyArray<'a, T> {
     buffer: &'a [u8],
     data_type: PhantomData<T>,
@@ -143,6 +145,18 @@ impl<'a, T: FromData> LazyArray<'a, T> {
             let start = index * T::SIZE;
             let end = start + T::SIZE;
             self.buffer.get(start..end).and_then(T::parse)
+        } else {
+            None
+        }
+    }
+
+    pub fn is_empty(&self) -> bool {
+        self.len() == 0
+    }
+
+    pub fn last(&self) -> Option<T> {
+        if !self.is_empty() {
+            self.get(self.len() - 1)
         } else {
             None
         }
@@ -285,6 +299,10 @@ impl<'a> Stream<'a> {
 
     pub fn set_offset(&mut self, offset: usize) {
         self.offset = offset;
+    }
+
+    pub fn get_offset(&self) -> usize {
+        self.offset
     }
 
     pub fn set_len(&mut self, len: usize) -> Option<()> {
