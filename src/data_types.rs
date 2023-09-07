@@ -52,6 +52,9 @@ impl fmt::Debug for Fixed {
     }
 }
 
+#[derive(Debug)]
+pub struct LONGDATETIME(pub i64); // Date and time represented in number of seconds since 12:00 midnight, January 1, 1904, UTC. The value is represented as a signed 64-bit integer.
+
 pub type TableTag = Tag;
 pub type Offset32 = u32;
 pub type Offset16 = u16;
