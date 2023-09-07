@@ -2,6 +2,7 @@ pub mod cmap;
 pub mod data_types;
 pub mod decoder;
 pub mod fvar;
+pub mod head;
 pub mod id;
 pub mod name;
 pub mod os_2;
