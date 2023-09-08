@@ -82,6 +82,14 @@ impl FromData for Version16Dot16 {
     }
 }
 
+impl FromData for F2DOT14 {
+    const SIZE: usize = i16::SIZE;
+    fn parse(data: &[u8]) -> Option<Self> {
+        type T = i16;
+        T::parse(data).map(Self)
+    }
+}
+
 // 実行時に要素のサイズが確定するデータの配列
 pub struct UnsizedLazyArray<'a, T> {
     buffer: &'a [u8],
