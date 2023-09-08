@@ -74,7 +74,7 @@ impl<'a> CmapSubtable<'a> {
         }
     }
 
-    pub fn get_glyph_id(&self, code_point: u16) -> Option<u16> {
+    pub fn get_glyph_id(&self, code_point: char) -> Option<u16> {
         match self {
             Self::Format4(x) => x.get_glyph_id(code_point),
             _ => todo!(),
@@ -82,7 +82,7 @@ impl<'a> CmapSubtable<'a> {
     }
 
     // TODO: Iterator
-    pub fn get_code_point_glyph_id_map(&self) -> HashMap<u16, u16> {
+    pub fn get_code_point_glyph_id_map(&self) -> HashMap<char, u16> {
         match self {
             Self::Format4(x) => x.get_code_point_glyph_id_map(),
             _ => todo!(),
@@ -145,7 +145,9 @@ impl<'a> CmapSubtableFormat4<'a> {
         })
     }
 
-    pub fn get_glyph_id(&self, code_point: u16) -> Option<u16> {
+    pub fn get_glyph_id(&self, code_point: char) -> Option<u16> {
+        // 0xFFFF 以上の Unicode Scalar Value の場合は None を返す．
+        let code_point = u16::try_from(code_point as u32).ok()?;
         let mut start = 0;
         let mut end = self.startCode.len(); // == segCount.
         while end > start {
@@ -200,7 +202,7 @@ impl<'a> CmapSubtableFormat4<'a> {
         return Some(0); // notdef.
     }
 
-    pub fn get_code_point_glyph_id_map(&self) -> HashMap<u16, u16> {
+    pub fn get_code_point_glyph_id_map(&self) -> HashMap<char, u16> {
         let mut map = HashMap::new();
         for (i, start_code_point) in self.startCode.into_iter().enumerate() {
             let end_code_point = self.endCode.get(i).unwrap();
@@ -218,7 +220,7 @@ impl<'a> CmapSubtableFormat4<'a> {
                     let glyph_id_array_index = gid_array_index + delta;
                     self.glyphIdArray.get(glyph_id_array_index).unwrap()
                 };
-                map.insert(code_point, glyph_id);
+                map.insert(char::from_u32(code_point as u32).unwrap(), glyph_id);
             }
         }
         map
