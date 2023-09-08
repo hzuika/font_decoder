@@ -63,6 +63,15 @@ pub struct LONGDATETIME(pub i64); // Date and time represented in number of seco
 #[derive(Debug)]
 pub struct Version16Dot16(pub u32); // Packed 32-bit value with major and minor version numbers.
 
+#[derive(Debug)]
+pub struct F2DOT14(pub i16);
+
+impl F2DOT14 {
+    pub fn to_f32(&self) -> f32 {
+        self.0 as f32 / 16384.0
+    }
+}
+
 pub type TableTag = Tag;
 pub type Offset32 = u32;
 pub type Offset16 = u16;
