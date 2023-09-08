@@ -6,6 +6,7 @@ use crate::{
 };
 
 #[allow(non_snake_case)]
+#[derive(Debug)]
 pub struct CmapHeader<'a> {
     pub version: uint16,                                // Table version number (0).
     pub numTables: uint16,                              // Number of encoding tables that follow.
@@ -94,7 +95,7 @@ pub struct CmapSubtableFormat4<'a> {
     pub format: uint16,                        // Format number is set to 4.
     pub length: uint16,                        // This is the length in bytes of the subtable.
     pub language: uint16, // For requirements on use of the language field, see “Use of the language field in 'cmap' subtables” in this document.
-    pub segCountX2: uint16, // 2 × segCount.
+    pub segCountX2: uint16, // 2 × segCount. u16 の配列があるので，2をかけている．
     pub searchRange: uint16, // Maximum power of 2 less than or equal to segCount, times 2 ((2**floor(log2(segCount))) * 2, where “**” is an exponentiation operator)
     pub entrySelector: uint16, // Log2 of the maximum power of 2 less than or equal to segCount (log2(searchRange/2), which is equal to floor(log2(segCount)))
     pub rangeShift: uint16,    // segCount times 2, minus searchRange ((segCount * 2) - searchRange)
@@ -120,7 +121,9 @@ impl<'a> CmapSubtableFormat4<'a> {
         let entrySelector = s.read()?;
         let rangeShift = s.read()?;
         let endCode = s.read_array(segCount)?;
+        assert_eq!(endCode.last().unwrap(), 0xFFFF);
         let reservedPad = s.read()?;
+        assert_eq!(reservedPad, 0);
         let startCode = s.read_array(segCount)?;
         let idDelta = s.read_array(segCount)?;
         let idRangeOffsets = s.read_array(segCount)?;
@@ -143,46 +146,55 @@ impl<'a> CmapSubtableFormat4<'a> {
     }
 
     pub fn get_glyph_id(&self, code_point: u16) -> Option<u16> {
-        let mut start_index = 0;
-        let mut end_index = self.startCode.len(); // segCount?
-        while end_index > start_index {
-            let mid_index = (start_index + end_index) / 2;
-            let end_code_point = self.endCode.get(mid_index)?;
+        let mut start = 0;
+        let mut end = self.startCode.len(); // == segCount.
+        while end > start {
+            let mid = (start + end) / 2;
+            let end_code_point = self.endCode.get(mid)?;
             if end_code_point < code_point {
-                // [... , mid_index, start_index, ..., end_index]
-                start_index = mid_index + 1;
+                // [... , mid, start, ..., end]
+                start = mid + 1;
                 continue;
             }
-            let start_code_point = self.startCode.get(mid_index)?;
+            // endCode.len() == startCode.len() が保証されているので，値は必ず存在する．
+            let start_code_point = self.startCode.get(mid).unwrap();
             if code_point < start_code_point {
-                // [start_index, ... , end_index = mid_index, ...]
-                end_index = mid_index;
+                // [start, ... , end = mid, ...]
+                end = mid;
                 continue;
             }
 
-            // start_code_point <= code_point <= end_code_point
+            // start_code_point <= code_point <= end_code_point の範囲に含まれている．
 
-            let id_range_offset = self.idRangeOffsets.get(mid_index)?;
-            let id_delta = self.idDelta.get(mid_index)?;
+            let id_range_offset = self.idRangeOffsets.get(mid)?;
+            let id_delta = self.idDelta.get(mid)?;
             if id_range_offset == 0 {
                 // 2の補数表現を使っているから，negative i16 を u16 と解釈してオーバフロー分を無視して加算すれば減算と同じ．
                 // 例: FFFF (= -1) + 0001 (= 1) = 0
                 return Some(code_point.wrapping_add(id_delta as u16));
             }
 
-            // id_range_offset が 0 で無い場合は，mid_indexの場所から id_range_offset の分だけオフセットした位置の glyph_id_array を取得する．
+            // id_range_offset が 0 で無い場合は，mid の場所から id_range_offset の分だけオフセットした位置の glyph_id_array を取得する．
 
-            // indices of idRangeOffsets [..., mid_index, ..., len() - 1]
-            // → Example (mid_index == 2, id_range_offset = idRangeOffsets[2] == 12, idRangeOffsets.len() == 6)
-            // indices of idRangeOffsets [0, 1,        2, 3, 4,        5]
-            // idRangeOffsets[u16]       [ ,  ,       12,  ,  ,         ]
-            // current pointer                         ↑
-            // indices of glyphIdArray                                   [ 0,  1,  2,  3, ...]
-            // glyphIdArray[u16]                                         [15, 16, 20, 21, ...]
-            // current pointer + (idRangeOffsets.len() - mid_index)        ↑
-            // current pointer + (id_range_offset / 2)                             ↑
-            let glyph_id_array_index =
-                (id_range_offset / 2) - (self.idRangeOffsets.len() - mid_index) as u16;
+            // curCode                          24
+            // startCode                 [0, 7, 23, ...]
+            // indices of idRangeOffsets [0, 1,  2, 3, 4, 5]
+            // idRangeOffsets[u16]       [ ,  , 12,  ,  ,  ]
+            //                                   ↑        ↑
+            //                                   i       (segCount - 1)
+            // curPtr = &idRangeOffsets[i]       ↑
+            // indices of glyphIdArray                      [ 0,  1,  2,  3, ...]
+            // glyphIdArray[u16]                            [15, 16, 20, 21, ...]
+            // curPtr + (segCount - i)                        ↑
+            // curPtr + (idRangeOffsets[i]/2) =                       ↑
+            // curPtr + (idRangeOffsets[i]/2) + (curCode - startCode[i])  ↑
+            //                                                |-----------|
+            let gid_array_index_from_id_range_offset = id_range_offset as usize / 2;
+            let gid_array_start_from_id_range_offset = self.idRangeOffsets.len() - mid;
+            let gid_array_index =
+                gid_array_index_from_id_range_offset - gid_array_start_from_id_range_offset;
+            let delta = (code_point - start_code_point) as usize;
+            let glyph_id_array_index = gid_array_index + delta;
             return Some(self.glyphIdArray.get(glyph_id_array_index as usize)?);
         }
         return Some(0); // notdef.
@@ -198,8 +210,12 @@ impl<'a> CmapSubtableFormat4<'a> {
                 let glyph_id = if id_range_offset == 0 {
                     code_point.wrapping_add(id_delta as u16)
                 } else {
-                    let glyph_id_array_index =
-                        (id_range_offset as usize / 2) - (self.idRangeOffsets.len() - i);
+                    let gid_array_index_from_id_range_offset = id_range_offset as usize / 2;
+                    let gid_array_start_from_id_range_offset = self.idRangeOffsets.len() - i;
+                    let gid_array_index =
+                        gid_array_index_from_id_range_offset - gid_array_start_from_id_range_offset;
+                    let delta = (code_point - start_code_point) as usize;
+                    let glyph_id_array_index = gid_array_index + delta;
                     self.glyphIdArray.get(glyph_id_array_index).unwrap()
                 };
                 map.insert(code_point, glyph_id);
