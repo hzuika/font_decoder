@@ -257,6 +257,7 @@ impl<'a, T: fmt::Debug> fmt::Debug for UnsizedLazyArray<'a, T> {
     }
 }
 
+#[derive(Clone)]
 pub struct Stream<'a> {
     data: &'a [u8],
     offset: usize,

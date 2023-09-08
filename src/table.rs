@@ -1,8 +1,9 @@
 use crate::{
     cmap::CmapTable,
-    data_types::{Offset32, TableTag, Tag, CMAP, FVAR, HEAD, LOCA, MAXP, NAME, OS_2, STAT},
+    data_types::{Offset32, TableTag, Tag, CMAP, FVAR, GLYF, HEAD, LOCA, MAXP, NAME, OS_2, STAT},
     decoder::{FromData, LazyArray, Stream},
     fvar::FvarTable,
+    glyf::GlyfTable,
     head::{HeadTable, LocaOffsetFormat},
     loca::LocaTable,
     maxp::MaxpTable,
@@ -206,5 +207,9 @@ impl<'a> Table<'a> {
     ) -> Option<LocaTable<'a>> {
         self.get_table_data(&LOCA)
             .and_then(|data| LocaTable::parse(data, format, num_glyphs))
+    }
+
+    pub fn get_glyf_table(&self) -> Option<GlyfTable<'a>> {
+        self.get_table_data(&GLYF).map(GlyfTable)
     }
 }
