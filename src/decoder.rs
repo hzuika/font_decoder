@@ -1,7 +1,7 @@
 use core::fmt;
-use std::{cmp::Ordering, marker::PhantomData};
+use std::{cmp::Ordering, marker::PhantomData, mem::size_of};
 
-use crate::data_types::{Fixed, Tag, Version16Dot16, LONGDATETIME};
+use crate::data_types::{Fixed, Tag, Version16Dot16, F2DOT14, LONGDATETIME};
 
 pub trait FromData: Sized {
     const SIZE: usize;
@@ -9,49 +9,63 @@ pub trait FromData: Sized {
 }
 
 impl FromData for u8 {
-    const SIZE: usize = 1;
+    const SIZE: usize = size_of::<Self>();
     fn parse(data: &[u8]) -> Option<Self> {
         data.try_into().map(Self::from_be_bytes).ok()
     }
 }
 
 impl FromData for u16 {
-    const SIZE: usize = 2;
+    const SIZE: usize = size_of::<Self>();
     fn parse(data: &[u8]) -> Option<Self> {
         data.try_into().map(Self::from_be_bytes).ok()
     }
 }
 
 impl FromData for u32 {
-    const SIZE: usize = 4;
+    const SIZE: usize = size_of::<Self>();
+    fn parse(data: &[u8]) -> Option<Self> {
+        data.try_into().map(Self::from_be_bytes).ok()
+    }
+}
+
+impl FromData for i8 {
+    const SIZE: usize = size_of::<Self>();
     fn parse(data: &[u8]) -> Option<Self> {
         data.try_into().map(Self::from_be_bytes).ok()
     }
 }
 
 impl FromData for i16 {
-    const SIZE: usize = 2;
+    const SIZE: usize = size_of::<Self>();
     fn parse(data: &[u8]) -> Option<Self> {
         data.try_into().map(Self::from_be_bytes).ok()
     }
 }
 
 impl FromData for i32 {
-    const SIZE: usize = 4;
+    const SIZE: usize = size_of::<Self>();
     fn parse(data: &[u8]) -> Option<Self> {
         data.try_into().map(Self::from_be_bytes).ok()
     }
 }
 
 impl FromData for i64 {
-    const SIZE: usize = 64;
+    const SIZE: usize = size_of::<Self>();
+    fn parse(data: &[u8]) -> Option<Self> {
+        data.try_into().map(Self::from_be_bytes).ok()
+    }
+}
+
+impl FromData for f32 {
+    const SIZE: usize = size_of::<Self>();
     fn parse(data: &[u8]) -> Option<Self> {
         data.try_into().map(Self::from_be_bytes).ok()
     }
 }
 
 impl FromData for Tag {
-    const SIZE: usize = 4;
+    const SIZE: usize = u32::SIZE;
     fn parse(data: &[u8]) -> Option<Self> {
         type T = u32;
         T::parse(data).map(Self)
@@ -59,7 +73,7 @@ impl FromData for Tag {
 }
 
 impl FromData for Fixed {
-    const SIZE: usize = 4;
+    const SIZE: usize = i32::SIZE;
     fn parse(data: &[u8]) -> Option<Self> {
         type T = i32;
         T::parse(data).map(Self)
@@ -67,7 +81,7 @@ impl FromData for Fixed {
 }
 
 impl FromData for LONGDATETIME {
-    const SIZE: usize = 8;
+    const SIZE: usize = i64::SIZE;
     fn parse(data: &[u8]) -> Option<Self> {
         type T = i64;
         T::parse(data).map(Self)
@@ -302,7 +316,7 @@ impl<'a> Stream<'a> {
             .map(|data| UnsizedLazyArray::new(data, data_size, parse_data))
     }
 
-    pub fn at_end(&self) -> bool {
+    pub fn is_end(&self) -> bool {
         self.offset == self.data.len()
     }
 
@@ -314,12 +328,16 @@ impl<'a> Stream<'a> {
         self.offset
     }
 
+    pub fn set_end(&mut self) {
+        self.offset = self.data.len()
+    }
+
     pub fn set_len(&mut self, len: usize) -> Option<()> {
         self.data = self.data.get(0..len)?;
         Some(())
     }
 
-    pub fn tail(self) -> Option<&'a [u8]> {
+    pub fn get_tail(self) -> Option<&'a [u8]> {
         self.data.get(self.offset..self.data.len())
     }
 }

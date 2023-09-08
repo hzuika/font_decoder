@@ -24,7 +24,8 @@ impl<'a> Glyph<'a> {
         let header: GlyphHeader = s.read()?;
         match header.get_type() {
             GlyphType::Simple => {
-                let subtable = SimpleGlyphTable::parse(s.tail()?, header.numberOfContours as u16)?;
+                let subtable =
+                    SimpleGlyphTable::parse(s.get_tail()?, header.numberOfContours as u16)?;
                 Some(Glyph {
                     header,
                     subtable: GlyphSubtable::Simple(subtable),

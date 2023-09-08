@@ -127,7 +127,7 @@ impl<'a> CmapSubtableFormat4<'a> {
         let startCode = s.read_array(segCount)?;
         let idDelta = s.read_array(segCount)?;
         let idRangeOffsets = s.read_array(segCount)?;
-        let glyphIdArray = LazyArray::new(s.tail()?);
+        let glyphIdArray = LazyArray::new(s.get_tail()?);
         Some(Self {
             format,
             length,
