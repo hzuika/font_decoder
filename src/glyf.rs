@@ -15,7 +15,7 @@ impl<'a> GlyfTable<'a> {
 
 pub struct Glyph {
     pub header: GlyphHeader,
-    pub subtable: GlyphSubtable,
+    pub subtable: GlyphTable,
 }
 
 impl Glyph {
@@ -28,7 +28,7 @@ impl Glyph {
                     SimpleGlyphTable::parse(s.get_tail()?, header.numberOfContours as u16)?;
                 Some(Glyph {
                     header,
-                    subtable: GlyphSubtable::Simple(subtable),
+                    subtable: GlyphTable::Simple(subtable),
                 })
             }
             GlyphType::Composite => {
@@ -38,18 +38,18 @@ impl Glyph {
     }
 }
 
-pub enum GlyphSubtable {
+pub enum GlyphTable {
     Simple(SimpleGlyphTable),
     Composite,
 }
 
-impl<'a> IntoIterator for &'a GlyphSubtable {
+impl<'a> IntoIterator for &'a GlyphTable {
     type IntoIter = GlyphPointsIter<'a>;
     type Item = GlyphPoint;
     fn into_iter(self) -> Self::IntoIter {
         match self {
-            GlyphSubtable::Simple(table) => GlyphPointsIter { table, index: 0 },
-            GlyphSubtable::Composite => {
+            GlyphTable::Simple(table) => GlyphPointsIter { table, index: 0 },
+            GlyphTable::Composite => {
                 todo!()
             }
         }
