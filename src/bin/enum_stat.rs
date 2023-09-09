@@ -11,7 +11,7 @@ fn main() {
     file.read_to_end(&mut buf).unwrap();
     let table = Table::new(&buf).unwrap();
     let stat = table.get_stat_table();
-    let name = table.get_name_table().unwrap();
+    let name = table.get_name_table();
     match stat {
         Some(stat) => {
             dbg!(&stat.header);

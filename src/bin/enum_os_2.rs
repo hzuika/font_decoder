@@ -10,6 +10,6 @@ fn main() {
     let mut buf = vec![];
     file.read_to_end(&mut buf).unwrap();
     let table = Table::new(&buf).unwrap();
-    let os2 = table.get_os2_table().unwrap();
+    let os2 = table.get_os2_table();
     dbg!(os2);
 }

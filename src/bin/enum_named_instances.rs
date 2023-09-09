@@ -4,7 +4,7 @@ use font_decoder::table::{is_ttc, Table};
 
 fn callback(table: &Table) -> Option<()> {
     let names: Vec<font_decoder::name::NameTableIterItem> =
-        table.get_name_table()?.into_iter().collect();
+        table.get_name_table().into_iter().collect();
     let fvar = table.get_fvar_table()?;
     for instance in &fvar.instances {
         dbg!(&instance);

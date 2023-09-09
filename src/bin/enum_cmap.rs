@@ -10,7 +10,7 @@ fn main() {
     let mut buf = vec![];
     file.read_to_end(&mut buf).unwrap();
     let table = Table::new(&buf).unwrap();
-    let cmap = table.get_cmap_table().unwrap();
+    let cmap = table.get_cmap_table();
     dbg!(&cmap.header);
     for item in &cmap.header.encodingRecords {
         dbg!(&item);

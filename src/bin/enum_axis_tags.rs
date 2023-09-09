@@ -7,7 +7,7 @@ use font_decoder::{
 
 fn callback(table: &Table) -> Option<()> {
     let fvar = table.get_fvar_table()?;
-    let names: Vec<NameTableIterItem> = table.get_name_table()?.into_iter().collect();
+    let names: Vec<NameTableIterItem> = table.get_name_table().into_iter().collect();
     for (i, axis) in (&fvar.axes).into_iter().enumerate() {
         dbg!(i);
         dbg!(axis.axisTag);

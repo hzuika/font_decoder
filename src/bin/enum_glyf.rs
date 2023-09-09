@@ -7,9 +7,9 @@ use font_decoder::{
 
 fn callback(table: &Table) {
     let glyf = table.get_glyf_table().unwrap();
-    let cmap = table.get_cmap_table().unwrap();
-    let maxp = table.get_maxp_table().unwrap();
-    let head = table.get_head_table().unwrap();
+    let cmap = table.get_cmap_table();
+    let maxp = table.get_maxp_table();
+    let head = table.get_head_table();
     let format = head.get_loca_offset_format();
     let num_glyphs = maxp.get_number_of_glyphs();
     let loca = table.get_loca_table(format, num_glyphs).unwrap();

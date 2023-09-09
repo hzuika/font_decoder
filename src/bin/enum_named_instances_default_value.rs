@@ -9,7 +9,7 @@ use font_decoder::{
 };
 
 fn callback(table: &Table) -> Option<()> {
-    let names: Vec<NameTableIterItem> = table.get_name_table()?.into_iter().collect();
+    let names: Vec<NameTableIterItem> = table.get_name_table().into_iter().collect();
     let fvar = table.get_fvar_table()?;
     let into_iter = fvar.axes.into_iter();
     let default_values: Vec<(Fixed, Tag)> =

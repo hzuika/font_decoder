@@ -4,7 +4,7 @@ use font_decoder::{data_types::FVAR, fvar::FvarTable, id::NameID, table::Table};
 
 fn callback(table: &Table) {
     let fvar = table.get_table_data(&FVAR);
-    let name = table.get_name_table().unwrap();
+    let name = table.get_name_table();
     match fvar {
         Some(fvar) => {
             let fvar = FvarTable::parse(fvar).unwrap();

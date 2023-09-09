@@ -164,10 +164,11 @@ impl<'a> Table<'a> {
         self.data.get(offset..end)
     }
 
-    pub fn get_name_table(&self) -> Option<NameTable<'a>> {
-        let data = self.get_table_data(&NAME)?;
-        let name = NameTable::parse(data);
-        name
+    pub fn get_name_table(&self) -> NameTable<'a> {
+        // Required Tables なので， unwrap する．
+        self.get_table_data(&NAME)
+            .and_then(NameTable::parse)
+            .unwrap()
     }
 
     pub fn get_fvar_table(&self) -> Option<FvarTable<'a>> {
@@ -182,24 +183,32 @@ impl<'a> Table<'a> {
         stat
     }
 
-    pub fn get_cmap_table(&self) -> Option<CmapTable<'a>> {
-        let data = self.get_table_data(&CMAP)?;
-        let cmap = CmapTable::parse(data);
-        cmap
+    pub fn get_cmap_table(&self) -> CmapTable<'a> {
+        // Required Tables なので， unwrap する．
+        self.get_table_data(&CMAP)
+            .and_then(CmapTable::parse)
+            .unwrap()
     }
 
-    pub fn get_os2_table(&self) -> Option<OS2Table> {
-        let data = self.get_table_data(&OS_2)?;
-        let os2 = OS2Table::parse(data);
-        os2
+    pub fn get_os2_table(&self) -> OS2Table {
+        // Required Tables なので， unwrap する．
+        self.get_table_data(&OS_2)
+            .and_then(OS2Table::parse)
+            .unwrap()
     }
 
-    pub fn get_head_table(&self) -> Option<HeadTable> {
-        self.get_table_data(&HEAD).and_then(HeadTable::parse)
+    pub fn get_head_table(&self) -> HeadTable {
+        // Required Tables なので， unwrap する．
+        self.get_table_data(&HEAD)
+            .and_then(HeadTable::parse)
+            .unwrap()
     }
 
-    pub fn get_maxp_table(&self) -> Option<MaxpTable> {
-        self.get_table_data(&MAXP).and_then(MaxpTable::parse)
+    pub fn get_maxp_table(&self) -> MaxpTable {
+        // Required Tables なので， unwrap する．
+        self.get_table_data(&MAXP)
+            .and_then(MaxpTable::parse)
+            .unwrap()
     }
 
     pub fn get_loca_table(&self, format: LocaOffsetFormat, num_glyphs: u16) -> Option<LocaTable> {
