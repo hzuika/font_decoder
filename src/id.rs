@@ -1,5 +1,6 @@
 use core::fmt;
 
+#[derive(Clone, Copy)]
 pub enum PlatformID {
     Unicode(u16),
     Mac(u16),
@@ -45,6 +46,7 @@ impl fmt::Display for PlatformID {
     }
 }
 
+#[derive(Clone, Copy)]
 pub enum EncodingID {
     Unicode(UnicodeEncodingID),
     Mac(MacEncodingID),
@@ -82,6 +84,7 @@ impl fmt::Display for EncodingID {
     }
 }
 
+#[derive(Clone, Copy)]
 pub enum LanguageID {
     Unicode,
     Mac(MacLanguageID),
@@ -119,6 +122,7 @@ impl fmt::Display for LanguageID {
     }
 }
 
+#[derive(Clone, Copy)]
 pub struct UnicodeEncodingID(pub u16);
 impl UnicodeEncodingID {
     pub fn to_name(&self) -> &'static str {
@@ -145,6 +149,7 @@ impl fmt::Display for UnicodeEncodingID {
     }
 }
 
+#[derive(Clone, Copy)]
 pub struct MacEncodingID(pub u16);
 impl MacEncodingID {
     pub fn to_name(&self) -> &'static str {
@@ -199,6 +204,7 @@ impl fmt::Display for MacEncodingID {
     }
 }
 
+#[derive(Clone, Copy)]
 pub struct MacLanguageID(pub u16);
 
 impl MacLanguageID {
@@ -339,6 +345,7 @@ impl fmt::Display for MacLanguageID {
     }
 }
 
+#[derive(Clone, Copy)]
 pub struct WinEncodingID(pub u16);
 impl WinEncodingID {
     pub fn to_name(&self) -> &'static str {
@@ -371,6 +378,7 @@ impl fmt::Display for WinEncodingID {
     }
 }
 
+#[derive(Clone, Copy)]
 pub struct WinLanguageID(pub u16);
 impl WinLanguageID {
     pub fn to_name(&self) -> &'static str {

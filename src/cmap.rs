@@ -2,20 +2,20 @@ use std::collections::HashMap;
 
 use crate::{
     data_types::{int16, uint16, Offset32},
-    decoder::{FromData, LazyArray, Stream},
+    decoder::{FromData, Stream},
 };
 
 #[allow(non_snake_case)]
 #[derive(Debug)]
-pub struct CmapHeader<'a> {
-    pub version: uint16,                                // Table version number (0).
-    pub numTables: uint16,                              // Number of encoding tables that follow.
-    pub encodingRecords: LazyArray<'a, EncodingRecord>, // [numTables]
+pub struct CmapHeader {
+    pub version: uint16,                      // Table version number (0).
+    pub numTables: uint16,                    // Number of encoding tables that follow.
+    pub encodingRecords: Vec<EncodingRecord>, // [numTables]
 }
 
-impl<'a> CmapHeader<'a> {
+impl CmapHeader {
     #[allow(non_snake_case)]
-    pub fn parse(data: &'a [u8]) -> Option<Self> {
+    pub fn parse(data: &[u8]) -> Option<Self> {
         let mut s = Stream::new(data);
         let version = s.read()?;
         let numTables = s.read()?;
@@ -52,10 +52,10 @@ impl FromData for EncodingRecord {
     }
 }
 
-pub enum CmapSubtable<'a> {
+pub enum CmapSubtable {
     Format0,
     Format2,
-    Format4(CmapSubtableFormat4<'a>),
+    Format4(CmapSubtableFormat4),
     Format6,
     Format8,
     Format10,
@@ -64,8 +64,8 @@ pub enum CmapSubtable<'a> {
     Format14,
 }
 
-impl<'a> CmapSubtable<'a> {
-    pub fn parse(data: &'a [u8]) -> Option<Self> {
+impl CmapSubtable {
+    pub fn parse(data: &[u8]) -> Option<Self> {
         let mut s = Stream::new(data);
         let format: u16 = s.read()?;
         match format {
@@ -91,25 +91,25 @@ impl<'a> CmapSubtable<'a> {
 }
 
 #[allow(non_snake_case)]
-pub struct CmapSubtableFormat4<'a> {
-    pub format: uint16,                        // Format number is set to 4.
-    pub length: uint16,                        // This is the length in bytes of the subtable.
+pub struct CmapSubtableFormat4 {
+    pub format: uint16,              // Format number is set to 4.
+    pub length: uint16,              // This is the length in bytes of the subtable.
     pub language: uint16, // For requirements on use of the language field, see “Use of the language field in 'cmap' subtables” in this document.
     pub segCountX2: uint16, // 2 × segCount. u16 の配列があるので，2をかけている．
     pub searchRange: uint16, // Maximum power of 2 less than or equal to segCount, times 2 ((2**floor(log2(segCount))) * 2, where “**” is an exponentiation operator)
     pub entrySelector: uint16, // Log2 of the maximum power of 2 less than or equal to segCount (log2(searchRange/2), which is equal to floor(log2(segCount)))
     pub rangeShift: uint16,    // segCount times 2, minus searchRange ((segCount * 2) - searchRange)
-    pub endCode: LazyArray<'a, uint16>, // [segCount] End characterCode for each segment, last=0xFFFF.
-    pub reservedPad: uint16,            // Set to 0.
-    pub startCode: LazyArray<'a, uint16>, // [segCount] Start character code for each segment.
-    pub idDelta: LazyArray<'a, int16>,  // [segCount] Delta for all character codes in segment.
-    pub idRangeOffsets: LazyArray<'a, uint16>, // [segCount] Offsets into glyphIdArray or 0
-    pub glyphIdArray: LazyArray<'a, uint16>, // [ ] Glyph index array (arbitrary length)
+    pub endCode: Vec<uint16>,  // [segCount] End characterCode for each segment, last=0xFFFF.
+    pub reservedPad: uint16,   // Set to 0.
+    pub startCode: Vec<uint16>, // [segCount] Start character code for each segment.
+    pub idDelta: Vec<int16>,   // [segCount] Delta for all character codes in segment.
+    pub idRangeOffsets: Vec<uint16>, // [segCount] Offsets into glyphIdArray or 0
+    pub glyphIdArray: Vec<uint16>, // [ ] Glyph index array (arbitrary length)
 }
 
-impl<'a> CmapSubtableFormat4<'a> {
+impl CmapSubtableFormat4 {
     #[allow(non_snake_case)]
-    pub fn parse(data: &'a [u8]) -> Option<Self> {
+    pub fn parse(data: &[u8]) -> Option<Self> {
         let mut s = Stream::new(data);
         let format = s.read()?;
         let length = s.read()?;
@@ -121,13 +121,13 @@ impl<'a> CmapSubtableFormat4<'a> {
         let entrySelector = s.read()?;
         let rangeShift = s.read()?;
         let endCode = s.read_array(segCount)?;
-        assert_eq!(endCode.last().unwrap(), 0xFFFF);
+        assert_eq!(endCode.last().unwrap(), &0xFFFF);
         let reservedPad = s.read()?;
         assert_eq!(reservedPad, 0);
         let startCode = s.read_array(segCount)?;
         let idDelta = s.read_array(segCount)?;
         let idRangeOffsets = s.read_array(segCount)?;
-        let glyphIdArray = LazyArray::new(s.get_tail()?);
+        let glyphIdArray = s.read_all_array()?;
         Some(Self {
             format,
             length,
@@ -152,14 +152,14 @@ impl<'a> CmapSubtableFormat4<'a> {
         let mut end = self.startCode.len(); // == segCount.
         while end > start {
             let mid = (start + end) / 2;
-            let end_code_point = self.endCode.get(mid)?;
+            let end_code_point = *self.endCode.get(mid)?;
             if end_code_point < code_point {
                 // [... , mid, start, ..., end]
                 start = mid + 1;
                 continue;
             }
             // endCode.len() == startCode.len() が保証されているので，値は必ず存在する．
-            let start_code_point = self.startCode.get(mid).unwrap();
+            let start_code_point = *self.startCode.get(mid).unwrap();
             if code_point < start_code_point {
                 // [start, ... , end = mid, ...]
                 end = mid;
@@ -168,8 +168,8 @@ impl<'a> CmapSubtableFormat4<'a> {
 
             // start_code_point <= code_point <= end_code_point の範囲に含まれている．
 
-            let id_range_offset = self.idRangeOffsets.get(mid)?;
-            let id_delta = self.idDelta.get(mid)?;
+            let id_range_offset = *self.idRangeOffsets.get(mid)?;
+            let id_delta = *self.idDelta.get(mid)?;
             if id_range_offset == 0 {
                 // 2の補数表現を使っているから，negative i16 を u16 と解釈してオーバフロー分を無視して加算すれば減算と同じ．
                 // 例: FFFF (= -1) + 0001 (= 1) = 0
@@ -197,18 +197,18 @@ impl<'a> CmapSubtableFormat4<'a> {
                 gid_array_index_from_id_range_offset - gid_array_start_from_id_range_offset;
             let delta = (code_point - start_code_point) as usize;
             let glyph_id_array_index = gid_array_index + delta;
-            return Some(self.glyphIdArray.get(glyph_id_array_index as usize)?);
+            return Some(*self.glyphIdArray.get(glyph_id_array_index as usize)?);
         }
         return Some(0); // notdef.
     }
 
     pub fn get_code_point_glyph_id_map(&self) -> HashMap<char, u16> {
         let mut map = HashMap::new();
-        for (i, start_code_point) in self.startCode.into_iter().enumerate() {
-            let end_code_point = self.endCode.get(i).unwrap();
-            let id_delta = self.idDelta.get(i).unwrap();
-            let id_range_offset = self.idRangeOffsets.get(i).unwrap();
-            for code_point in start_code_point..=end_code_point {
+        for (i, start_code_point) in self.startCode.iter().enumerate() {
+            let end_code_point = *self.endCode.get(i).unwrap();
+            let id_delta = *self.idDelta.get(i).unwrap();
+            let id_range_offset = *self.idRangeOffsets.get(i).unwrap();
+            for code_point in *start_code_point..=end_code_point {
                 let glyph_id = if id_range_offset == 0 {
                     code_point.wrapping_add(id_delta as u16)
                 } else {
@@ -218,7 +218,7 @@ impl<'a> CmapSubtableFormat4<'a> {
                         gid_array_index_from_id_range_offset - gid_array_start_from_id_range_offset;
                     let delta = (code_point - start_code_point) as usize;
                     let glyph_id_array_index = gid_array_index + delta;
-                    self.glyphIdArray.get(glyph_id_array_index).unwrap()
+                    *self.glyphIdArray.get(glyph_id_array_index).unwrap()
                 };
                 map.insert(char::from_u32(code_point as u32).unwrap(), glyph_id);
             }
@@ -229,7 +229,7 @@ impl<'a> CmapSubtableFormat4<'a> {
 
 pub struct CmapTable<'a> {
     data: &'a [u8],
-    pub header: CmapHeader<'a>,
+    pub header: CmapHeader,
 }
 
 impl<'a> CmapTable<'a> {

@@ -1,7 +1,7 @@
 use crate::{
     cmap::CmapTable,
     data_types::{Offset32, TableTag, Tag, CMAP, FVAR, GLYF, HEAD, LOCA, MAXP, NAME, OS_2, STAT},
-    decoder::{FromData, LazyArray, Stream},
+    decoder::{FromData, Stream},
     fvar::FvarTable,
     glyf::GlyfTable,
     head::{HeadTable, LocaOffsetFormat},
@@ -13,16 +13,16 @@ use crate::{
 };
 
 #[allow(non_snake_case)]
-pub struct TTCHeader<'a> {
+pub struct TTCHeader {
     pub ttcTag: Tag, // Font Collection ID string: 'ttcf' (used for fonts with CFF or CFF2 outlines as well as TrueType outlines)
     pub majorVersion: u16, // Major version of the TTC Header, = 1.
     pub minorVersion: u16, // Minor version of the TTC Header, = 0.
     pub numFonts: u32, // Number of fonts in TTC
-    pub tableDirectoryOffsets: LazyArray<'a, Offset32>, // Array of offsets to the TableDirectory for each font from the beginning of the file
+    pub tableDirectoryOffsets: Vec<Offset32>, // Array of offsets to the TableDirectory for each font from the beginning of the file
 }
 
-impl<'a> TTCHeader<'a> {
-    pub fn parse(data: &'a [u8]) -> Option<Self> {
+impl TTCHeader {
+    pub fn parse(data: &[u8]) -> Option<Self> {
         let mut s = Stream::new(data);
         let ttc_tag = s.read()?;
         let major_version = s.read()?;
@@ -41,7 +41,7 @@ impl<'a> TTCHeader<'a> {
 
 pub struct Collection<'a> {
     data: &'a [u8],
-    pub header: TTCHeader<'a>,
+    pub header: TTCHeader,
 }
 
 impl<'a> Collection<'a> {
@@ -51,7 +51,7 @@ impl<'a> Collection<'a> {
     }
 
     pub fn get(&self, index: usize) -> Option<Table<'a>> {
-        let offset = self.header.tableDirectoryOffsets.get(index)? as usize;
+        let offset = *self.header.tableDirectoryOffsets.get(index)? as usize;
         let table_record_data = self.data.get(offset..self.data.len())?;
         let table_directory = TableDirectory::parse(table_record_data)?;
         Some(Table {
@@ -78,7 +78,7 @@ fn check_sfnt_version(sfnt_version: &Tag) {
 }
 
 #[allow(non_snake_case)]
-#[derive(Debug)]
+#[derive(Debug, Clone, Copy)]
 pub struct TableRecord {
     pub tableTag: TableTag,
     pub checksum: u32,
@@ -100,17 +100,17 @@ impl FromData for TableRecord {
 }
 
 #[allow(non_snake_case)]
-pub struct TableDirectory<'a> {
+pub struct TableDirectory {
     pub sfntVersion: Tag,
     pub numTables: u16,
     pub searchRange: u16,
     pub entrySelector: u16,
     pub rangeShift: u16,
-    pub tableRecords: LazyArray<'a, TableRecord>,
+    pub tableRecords: Vec<TableRecord>,
 }
 
-impl<'a> TableDirectory<'a> {
-    pub fn parse(data: &'a [u8]) -> Option<Self> {
+impl TableDirectory {
+    pub fn parse(data: &[u8]) -> Option<Self> {
         let mut s = Stream::new(data);
         let sfnt_version: Tag = s.read()?;
         check_sfnt_version(&sfnt_version);
@@ -132,7 +132,7 @@ impl<'a> TableDirectory<'a> {
 
 pub struct Table<'a> {
     data: &'a [u8], // all data.
-    pub table_directory: TableDirectory<'a>,
+    pub table_directory: TableDirectory,
 }
 
 impl<'a> Table<'a> {
@@ -145,10 +145,12 @@ impl<'a> Table<'a> {
     }
 
     pub fn get_table_record(&self, tag: &Tag) -> Option<TableRecord> {
-        let (_, table_record) = self
+        let index = self
             .table_directory
             .tableRecords
-            .binary_search_by(|record| record.tableTag.cmp(tag))?;
+            .binary_search_by(|record| record.tableTag.cmp(tag))
+            .ok()?;
+        let table_record = self.table_directory.tableRecords[index];
         Some(table_record)
     }
 
@@ -200,11 +202,7 @@ impl<'a> Table<'a> {
         self.get_table_data(&MAXP).and_then(MaxpTable::parse)
     }
 
-    pub fn get_loca_table(
-        &self,
-        format: LocaOffsetFormat,
-        num_glyphs: u16,
-    ) -> Option<LocaTable<'a>> {
+    pub fn get_loca_table(&self, format: LocaOffsetFormat, num_glyphs: u16) -> Option<LocaTable> {
         self.get_table_data(&LOCA)
             .and_then(|data| LocaTable::parse(data, format, num_glyphs))
     }

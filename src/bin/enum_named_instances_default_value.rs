@@ -25,8 +25,8 @@ fn callback(table: &Table) -> Option<()> {
                 break;
             }
         }
-        for (i, coord) in instance.coordinates.coordinates.into_iter().enumerate() {
-            if coord == default_values[i].0 {
+        for (i, coord) in instance.coordinates.coordinates.iter().enumerate() {
+            if coord == &default_values[i].0 {
                 println!("[{} ({:?})] {:?} (default)", i, default_values[i].1, coord);
             } else {
                 println!("[{} ({:?})] {:?}", i, default_values[i].1, coord);

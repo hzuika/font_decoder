@@ -1,9 +1,10 @@
 use core::fmt;
 use encoding_rs;
+use std::mem::size_of;
 
 use crate::{
     data_types::Offset16,
-    decoder::{FromData, LazyArray, Stream},
+    decoder::{FromData, Stream},
     id::{EncodingID, LanguageID, NameID, PlatformID},
 };
 
@@ -66,9 +67,9 @@ pub struct NameTable<'a> {
     pub version: u16,
     pub count: u16,
     pub storageOffset: Offset16,
-    pub nameRecords: LazyArray<'a, NameRecord>,
+    pub nameRecords: Vec<NameRecord>,
     pub langTagCount: u16,
-    pub langTagRecords: LazyArray<'a, LangTagRecord>,
+    pub langTagRecords: Vec<LangTagRecord>,
     pub storage: &'a [u8],
 }
 
@@ -82,7 +83,7 @@ impl<'a> NameTable<'a> {
         let (lang_tag_count, lang_tag_records) = match version {
             0 => {
                 let lang_tag_count = 0;
-                let lang_tag_records = LazyArray::new(&[]);
+                let lang_tag_records = Vec::new();
                 (lang_tag_count, lang_tag_records)
             }
             1 => {
@@ -115,7 +116,8 @@ impl<'a> NameTable<'a> {
         match record.platformId {
             PlatformID::Unicode(_) => {
                 // UTF16 BE
-                let bytes: Vec<u16> = LazyArray::new(bytes).into_iter().collect();
+                let mut s = Stream::new(bytes);
+                let bytes: Vec<u16> = s.read_array(length / size_of::<u16>())?;
                 String::from_utf16(&bytes).ok()
             }
             PlatformID::Mac(_) => {
@@ -148,7 +150,8 @@ impl<'a> NameTable<'a> {
             }
             PlatformID::Win(_) => {
                 // UTF16 BE
-                let bytes: Vec<u16> = LazyArray::new(bytes).into_iter().collect();
+                let mut s = Stream::new(bytes);
+                let bytes: Vec<u16> = s.read_array(length / size_of::<u16>())?;
                 String::from_utf16(&bytes).ok()
             }
         }
@@ -156,7 +159,7 @@ impl<'a> NameTable<'a> {
 
     pub fn get_strings_by_name_id(&self, name_id: NameID) -> Vec<LocalizedString> {
         let mut v = vec![];
-        for name_record in self.nameRecords.into_iter().filter(|x| x.nameId == name_id) {
+        for name_record in self.nameRecords.iter().filter(|x| x.nameId == name_id) {
             let string = self.get_string(&name_record).unwrap();
             v.push(LocalizedString {
                 string,

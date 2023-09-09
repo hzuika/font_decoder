@@ -11,7 +11,7 @@ fn callback(table: &Table) {
     let name = NameTable::parse(name).unwrap();
     for record in name
         .nameRecords
-        .into_iter()
+        .iter()
         .filter(|x| x.nameId.0 == 1 || x.nameId.0 == 16 || x.nameId.0 == 21)
     {
         dbg!(&record.nameId);

@@ -2,7 +2,7 @@ use std::ops::Range;
 
 use crate::{
     data_types::{int16, uint16, uint8},
-    decoder::{FromData, LazyArray, Stream},
+    decoder::{FromData, Stream},
 };
 
 pub struct GlyfTable<'a>(pub &'a [u8]);
@@ -13,13 +13,13 @@ impl<'a> GlyfTable<'a> {
     }
 }
 
-pub struct Glyph<'a> {
+pub struct Glyph {
     pub header: GlyphHeader,
-    pub subtable: GlyphSubtable<'a>,
+    pub subtable: GlyphSubtable,
 }
 
-impl<'a> Glyph<'a> {
-    pub fn parse(data: &'a [u8]) -> Option<Self> {
+impl Glyph {
+    pub fn parse(data: &[u8]) -> Option<Self> {
         let mut s = Stream::new(data);
         let header: GlyphHeader = s.read()?;
         match header.get_type() {
@@ -38,16 +38,20 @@ impl<'a> Glyph<'a> {
     }
 }
 
-pub enum GlyphSubtable<'a> {
-    Simple(SimpleGlyphTable<'a>),
+pub enum GlyphSubtable {
+    Simple(SimpleGlyphTable),
     Composite,
 }
 
-impl<'a> GlyphSubtable<'a> {
-    pub fn get_glyph_points_iter(&self) -> &GlyphPointsIter<'a> {
+impl<'a> IntoIterator for &'a GlyphSubtable {
+    type IntoIter = GlyphPointsIter<'a>;
+    type Item = GlyphPoint;
+    fn into_iter(self) -> Self::IntoIter {
         match self {
-            Self::Simple(table) => &table.glyph_points_iter,
-            Self::Composite => todo!(),
+            GlyphSubtable::Simple(table) => GlyphPointsIter { table, index: 0 },
+            GlyphSubtable::Composite => {
+                todo!()
+            }
         }
     }
 }
@@ -97,47 +101,78 @@ impl GlyphHeader {
 }
 
 #[allow(non_snake_case)]
-pub struct SimpleGlyphTable<'a> {
-    pub endPtsOfContours: LazyArray<'a, uint16>, //[numberOfContours]Array of point indices for the last point of each contour, in increasing numeric order.
+pub struct SimpleGlyphTable {
+    pub endPtsOfContours: Vec<uint16>, //[numberOfContours]Array of point indices for the last point of each contour, in increasing numeric order.
     pub instructionLength: uint16, //Total number of bytes for instructions. If instructionLength is zero, no instructions are present for this glyph, and this field is followed directly by the flags field.
-    pub instructions: LazyArray<'a, uint8>, //[instructionLength]Array of instruction byte code for the glyph.
-    pub glyph_points_iter: GlyphPointsIter<'a>,
-    // flags, xCoordinates, yCoordinates をまとめて GlyphPointsIter で表す．
-    // uint8 flags[variable]Array of flag elements. See below for details regarding the number of flag array elements.
-    // uint8 or int16 xCoordinates[variable]Contour point x-coordinates. See below for details regarding the number of coordinate array elements. Coordinate for the first point is relative to (0,0); others are relative to previous point.
-    // uint8 or int16 yCoordinates[variable]Contour point y-coordinates. See below for details regarding the number of coordinate array elements. Coordinate for the first point is relative to (0,0); others are relative to previous point.
+    pub instructions: Vec<uint8>, //[instructionLength]Array of instruction byte code for the glyph.
+    pub flags: Vec<SimpleGlyphFlags>, // flatten flags. uint8 flags[variable]Array of flag elements. See below for details regarding the number of flag array elements.
+    pub xCoordinates: Vec<i16>, // uint8 or int16 xCoordinates[variable]Contour point x-coordinates. See below for details regarding the number of coordinate array elements. Coordinate for the first point is relative to (0,0); others are relative to previous point.
+    pub yCoordinates: Vec<i16>, // uint8 or int16 yCoordinates[variable]Contour point y-coordinates. See below for details regarding the number of coordinate array elements. Coordinate for the first point is relative to (0,0); others are relative to previous point.
 }
 
-impl<'a> SimpleGlyphTable<'a> {
+impl SimpleGlyphTable {
     #[allow(non_snake_case)]
-    pub fn parse(data: &'a [u8], number_of_contours: u16) -> Option<Self> {
+    pub fn parse(data: &[u8], number_of_contours: u16) -> Option<Self> {
         let mut s = Stream::new(data);
-        let endPtsOfContours: LazyArray<'_, u16> = s.read_array(number_of_contours as usize)?;
+        let endPtsOfContours: Vec<u16> = s.read_array(number_of_contours as usize)?;
         let number_of_points = endPtsOfContours.last()?.checked_add(1)?;
         let instructionLength = s.read()?;
         let instructions = s.read_array(instructionLength as usize)?;
-        let flags_offset = s.get_offset();
-        let (x_coords_len, y_coords_len) = get_coords_len(&mut s, number_of_points as usize)?;
-        let x_coords_offset = s.get_offset();
-        let y_coords_offset = x_coords_offset + x_coords_len;
-        let y_coords_end = y_coords_offset + y_coords_len;
 
-        let flags = FlagsIter::new(data.get(flags_offset..x_coords_offset)?);
-        let x_coords = CoordsIter::new(data.get(x_coords_offset..y_coords_offset)?);
-        let y_coords = CoordsIter::new(data.get(y_coords_offset..y_coords_end)?);
-        let glyph_points_iter = GlyphPointsIter {
-            endpoints: EndPointsIter::new(endPtsOfContours)?,
-            flags,
-            x_coords,
-            y_coords,
-            points_left: number_of_points,
-        };
+        // flatten flags -> group by contour.
+        let mut flags_left = number_of_points;
+        let mut flags = vec![];
+        while flags_left > 0 {
+            let flag = s.read::<SimpleGlyphFlags>()?;
+
+            let repeat = 1 + if flag.repeat_flag() {
+                s.read::<u8>()? as u16
+            } else {
+                0
+            };
+
+            for _ in 0..repeat {
+                flags.push(flag);
+            }
+
+            flags_left -= repeat;
+        }
+
+        assert_eq!(flags.len(), number_of_points as usize);
+
+        let mut prev: i16 = 0;
+        let mut xCoordinates = vec![];
+        for flag in &flags {
+            let delta = match flag.get_x_type() {
+                CoordType::Positive8 => i16::from(s.read::<u8>()?),
+                CoordType::Negative8 => -i16::from(s.read::<u8>()?),
+                CoordType::I16 => s.read::<i16>()?,
+                CoordType::SamePrevious => 0,
+            };
+            prev = prev.wrapping_add(delta);
+            xCoordinates.push(prev);
+        }
+
+        let mut prev: i16 = 0;
+        let mut yCoordinates = vec![];
+        for flag in &flags {
+            let delta = match flag.get_y_type() {
+                CoordType::Positive8 => i16::from(s.read::<u8>()?),
+                CoordType::Negative8 => -i16::from(s.read::<u8>()?),
+                CoordType::I16 => s.read::<i16>()?,
+                CoordType::SamePrevious => 0,
+            };
+            prev = prev.wrapping_add(delta);
+            yCoordinates.push(prev);
+        }
 
         Some(Self {
             endPtsOfContours,
             instructionLength,
             instructions,
-            glyph_points_iter,
+            flags,
+            xCoordinates,
+            yCoordinates,
         })
     }
 }
@@ -146,151 +181,52 @@ impl<'a> SimpleGlyphTable<'a> {
 pub struct GlyphPoint {
     pub x: i16,
     pub y: i16,
-    pub is_on_curve: bool,
+    pub flags: SimpleGlyphFlags,
     pub is_last: bool,
 }
 
 // TODO: GlyphContoursIter にしてもいいかもしれない．
 #[derive(Clone)]
 pub struct GlyphPointsIter<'a> {
-    endpoints: EndPointsIter<'a>,
-    flags: FlagsIter<'a>,
-    x_coords: CoordsIter<'a>,
-    y_coords: CoordsIter<'a>,
-    pub points_left: u16, // グリフ内の残りの点の数．
+    table: &'a SimpleGlyphTable,
+    index: usize,
 }
 
 impl<'a> Iterator for GlyphPointsIter<'a> {
     type Item = GlyphPoint;
 
     fn next(&mut self) -> Option<Self::Item> {
-        self.points_left = self.points_left.checked_sub(1)?;
+        self.index += 1;
+        let index = self.index - 1;
 
-        let is_last = self.endpoints.next();
-        let flags = self.flags.next()?;
-        let x = self.x_coords.next(flags.get_x_type());
-        let y = self.y_coords.next(flags.get_y_type());
-        let is_on_curve = flags.is_on_curve_point();
+        let x = *self.table.xCoordinates.get(index)?;
+        let y = *self.table.yCoordinates.get(index)?;
+        let flags = *self.table.flags.get(index)?;
+        let is_last = self
+            .table
+            .endPtsOfContours
+            .iter()
+            .find(|&&x| x as usize == index)
+            .is_some();
+
         Some(GlyphPoint {
             x,
             y,
-            is_on_curve,
+            flags,
             is_last,
         })
     }
 }
 
-// 輪郭の終点を指し示すイテレータ．
-// 終点が           2   4     7 の場合
-// 終点フラグを 0 0 1 0 1 0 0 1 のように立てる．
-#[derive(Clone)]
-struct EndPointsIter<'a> {
-    endpoints: LazyArray<'a, u16>,
-    index: u16,
-    left: u16, // endpoint までの残り．0 になると，endpointになる．
-}
-
-impl<'a> EndPointsIter<'a> {
-    fn new(end_points_of_contours: LazyArray<'a, u16>) -> Option<Self> {
-        Some(EndPointsIter {
-            endpoints: end_points_of_contours,
-            index: 1, // 最初の終点の位置を取得するので，開始インデックスは 1 になる．
-            left: end_points_of_contours.get(0)?, // 最初の終点の位置を取得しておく必要がある．
-        })
-    }
-
-    fn next(&mut self) -> bool {
-        if self.left == 0 {
-            if let Some(endpoint) = self.endpoints.get(self.index as usize) {
-                // 現在の endpoint と 前の endpoint の間にある数だけ false を返すように self.left を設定する．
-                // 終点            2             4
-                // フラグ 0 0 prev_endpoint 0 endpoint
-                let prev_endpoint = self.endpoints.get(self.index as usize - 1).unwrap();
-                self.left = endpoint.saturating_sub(prev_endpoint);
-                self.left = self.left.saturating_sub(1);
-            }
-            if let Some(n) = self.index.checked_add(1) {
-                self.index = n;
-            }
-            true
-        } else {
-            self.left -= 1;
-            false
-        }
-    }
-}
-
-#[derive(Clone)]
-struct FlagsIter<'a> {
-    stream: Stream<'a>,
-    repeats: u8, // Stream を消費する前に，repeasts の回数を消費する．
-    flags: SimpleGlyphFlags,
-}
-
-impl<'a> FlagsIter<'a> {
-    fn new(data: &'a [u8]) -> Self {
-        FlagsIter {
-            stream: Stream::new(data),
-            repeats: 0,
-            flags: SimpleGlyphFlags(0),
-        }
-    }
-}
-
-impl<'a> Iterator for FlagsIter<'a> {
-    type Item = SimpleGlyphFlags;
-
-    fn next(&mut self) -> Option<Self::Item> {
-        if self.repeats == 0 {
-            // Stream を消費する．
-            self.flags = SimpleGlyphFlags(self.stream.read().unwrap());
-            if self.flags.repeat_flag() {
-                self.repeats = self.stream.read().unwrap();
-            }
-        } else {
-            // repeats を消費する
-            self.repeats -= 1;
-        }
-
-        Some(self.flags)
-    }
-}
-
-#[derive(Clone)]
-struct CoordsIter<'a> {
-    stream: Stream<'a>,
-    prev: i16, // 差分データから絶対座標を計算するために，一つ前の絶対座標を保存する．
-}
-
-impl<'a> CoordsIter<'a> {
-    fn new(data: &'a [u8]) -> Self {
-        CoordsIter {
-            stream: Stream::new(data),
-            prev: 0,
-        }
-    }
-    fn next(&mut self, coord_type: CoordType) -> i16 {
-        let delta = match coord_type {
-            CoordType::Positive8 => i16::from(self.stream.read::<u8>().unwrap()),
-            CoordType::Negative8 => -i16::from(self.stream.read::<u8>().unwrap()),
-            CoordType::I16 => self.stream.read::<i16>().unwrap_or(0),
-            CoordType::SamePrevious => 0,
-        };
-
-        self.prev = self.prev.wrapping_add(delta);
-        self.prev
-    }
-}
-
-enum CoordType {
+pub enum CoordType {
     Positive8,
     Negative8,
     SamePrevious,
     I16,
 }
 
-#[derive(Clone, Copy)]
-struct SimpleGlyphFlags(u8);
+#[derive(Clone, Copy, Debug)]
+pub struct SimpleGlyphFlags(pub u8);
 impl FromData for SimpleGlyphFlags {
     const SIZE: usize = 1;
     fn parse(data: &[u8]) -> Option<Self> {
@@ -299,45 +235,28 @@ impl FromData for SimpleGlyphFlags {
 }
 
 impl SimpleGlyphFlags {
-    const ON_CURVE_POINT: u8 = 0x01;
-    const X_SHORT_VECTOR: u8 = 0x02;
-    const Y_SHORT_VECTOR: u8 = 0x04;
-    const REPEAT_FLAG: u8 = 0x08;
-    const X_IS_SAME_OR_POSITIVE_X_SHORT_VECTOR: u8 = 0x10;
-    const Y_IS_SAME_OR_POSITIVE_Y_SHORT_VECTOR: u8 = 0x20;
+    pub const ON_CURVE_POINT: u8 = 0x01;
+    pub const X_SHORT_VECTOR: u8 = 0x02;
+    pub const Y_SHORT_VECTOR: u8 = 0x04;
+    pub const REPEAT_FLAG: u8 = 0x08;
+    pub const X_IS_SAME_OR_POSITIVE_X_SHORT_VECTOR: u8 = 0x10;
+    pub const Y_IS_SAME_OR_POSITIVE_Y_SHORT_VECTOR: u8 = 0x20;
 
     #[inline]
-    fn is_1byte_x(&self) -> bool {
+    pub fn is_1byte_x(&self) -> bool {
         self.0 & Self::X_SHORT_VECTOR != 0
     }
-    #[inline]
-    fn is_2byte_x(&self) -> bool {
-        self.0 & (Self::X_SHORT_VECTOR | Self::X_IS_SAME_OR_POSITIVE_X_SHORT_VECTOR) == 0
-    }
-    #[inline]
-    fn get_x_byte_size(&self) -> usize {
-        // SimpleGlyphFlags::X_SHORT_VECTOR で排他的なので，どちらかは0になる．
-        self.is_1byte_x() as usize + (self.is_2byte_x() as usize * 2)
-    }
 
     #[inline]
-    fn is_1byte_y(&self) -> bool {
+    pub fn is_1byte_y(&self) -> bool {
         self.0 & Self::Y_SHORT_VECTOR != 0
     }
-    #[inline]
-    fn is_2byte_y(&self) -> bool {
-        self.0 & (Self::Y_SHORT_VECTOR | Self::Y_IS_SAME_OR_POSITIVE_Y_SHORT_VECTOR) == 0
-    }
-    #[inline]
-    fn get_y_byte_size(&self) -> usize {
-        self.is_1byte_y() as usize + (self.is_2byte_y() as usize * 2)
-    }
 
-    fn is_on_curve_point(&self) -> bool {
+    pub fn is_on_curve_point(&self) -> bool {
         self.0 & Self::ON_CURVE_POINT != 0
     }
 
-    fn get_x_type(&self) -> CoordType {
+    pub fn get_x_type(&self) -> CoordType {
         if self.is_1byte_x() {
             if self.0 & Self::X_IS_SAME_OR_POSITIVE_X_SHORT_VECTOR != 0 {
                 CoordType::Positive8
@@ -353,7 +272,7 @@ impl SimpleGlyphFlags {
         }
     }
 
-    fn get_y_type(&self) -> CoordType {
+    pub fn get_y_type(&self) -> CoordType {
         if self.is_1byte_y() {
             if self.0 & Self::Y_IS_SAME_OR_POSITIVE_Y_SHORT_VECTOR != 0 {
                 CoordType::Positive8
@@ -371,31 +290,7 @@ impl SimpleGlyphFlags {
 
     // true のとき，このバイトの次のバイト(u8)の数だけ，このバイトを足す．
     // 例: [f,3] → [f,f,f,f] のように展開される．
-    fn repeat_flag(&self) -> bool {
+    pub fn repeat_flag(&self) -> bool {
         self.0 & Self::REPEAT_FLAG != 0
     }
-}
-
-fn get_coords_len(s: &mut Stream, number_of_points: usize) -> Option<(usize, usize)> {
-    let mut flags_left = number_of_points;
-    let mut x_coords_len = 0;
-    let mut y_coords_len = 0;
-    while flags_left > 0 {
-        let flags = SimpleGlyphFlags(s.read()?);
-        let repeats = if flags.repeat_flag() {
-            s.read::<u8>()? as usize + 1
-        } else {
-            1
-        };
-        if repeats > flags_left {
-            return None;
-        }
-
-        x_coords_len += flags.get_x_byte_size() * repeats;
-        y_coords_len += flags.get_y_byte_size() * repeats;
-
-        flags_left -= repeats;
-    }
-
-    Some((x_coords_len, y_coords_len))
 }

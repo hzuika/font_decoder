@@ -1,6 +1,6 @@
 use crate::{
     data_types::{Fixed, Offset16, Tag},
-    decoder::{FromData, LazyArray, Stream, UnsizedLazyArray},
+    decoder::{FromData, Stream},
 };
 
 #[allow(non_snake_case)]
@@ -59,21 +59,21 @@ impl FromData for VariationAxisRecord {
 }
 
 #[derive(Debug)]
-pub struct UserTuple<'a> {
-    pub coordinates: LazyArray<'a, Fixed>, // axisCount
+pub struct UserTuple {
+    pub coordinates: Vec<Fixed>, // axisCount
 }
 
 #[allow(non_snake_case)]
 #[derive(Debug)]
-pub struct InstanceRecord<'a> {
+pub struct InstanceRecord {
     pub subfamilyNameId: u16, // The name ID for entries in the 'name' table that provide subfamily names for this instance.
     pub flags: u16,           // Reserved for future use — set to 0.
-    pub coordinates: UserTuple<'a>, // The coordinates array for this instance.
+    pub coordinates: UserTuple, // The coordinates array for this instance.
     pub postScriptNameId: Option<u16>, // Optional. The name ID for entries in the 'name' table that provide PostScript names for this instance.
 }
 
-impl<'a> InstanceRecord<'a> {
-    pub fn parse(data: &'a [u8], axis_count: usize) -> Option<Self> {
+impl InstanceRecord {
+    pub fn parse(data: &[u8], axis_count: usize) -> Option<Self> {
         let mut s = Stream::new(data);
         let subfamily_name_id = s.read()?;
         let flags = s.read()?;
@@ -94,8 +94,8 @@ impl<'a> InstanceRecord<'a> {
 pub struct FvarTable<'a> {
     pub data: &'a [u8],
     pub header: FvarHeader,
-    pub axes: LazyArray<'a, VariationAxisRecord>,
-    pub instances: UnsizedLazyArray<'a, InstanceRecord<'a>>,
+    pub axes: Vec<VariationAxisRecord>,
+    pub instances: Vec<InstanceRecord>,
 }
 
 impl<'a> FvarTable<'a> {

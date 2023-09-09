@@ -1,6 +1,6 @@
 use crate::{
     data_types::{uint16, Fixed, Offset16, Offset32, Tag},
-    decoder::{FromData, LazyArray, Stream, UnsizedLazyArray},
+    decoder::{FromData, Stream},
 };
 
 #[allow(non_snake_case)]
@@ -91,8 +91,8 @@ impl FromData for AxisRecord {
 #[allow(non_snake_case)]
 pub struct StatTable<'a> {
     pub header: StatHeader,
-    pub designAxes: UnsizedLazyArray<'a, AxisRecord>, //	[designAxisCount]	The design-axes array.
-    pub axisValueOffsets: LazyArray<'a, Offset16>, //	[axisValueCount]	Array of offsets to axis value tables, in bytes from the start of the axis value offsets array.
+    pub designAxes: Vec<AxisRecord>, //	[designAxisCount]	The design-axes array.
+    pub axisValueOffsets: Vec<Offset16>, //	[axisValueCount]	Array of offsets to axis value tables, in bytes from the start of the axis value offsets array.
     axisValueTables: &'a [u8],
 }
 
@@ -118,9 +118,9 @@ impl<'a> StatTable<'a> {
         })
     }
 
-    pub fn get_axis_value_table(&self, index: usize) -> Option<AxisValueTable<'a>> {
+    pub fn get_axis_value_table(&self, index: usize) -> Option<AxisValueTable> {
         let offset = self.axisValueOffsets.get(index)?;
-        AxisValueTable::parse(self.axisValueTables.get(offset as usize..)?)
+        AxisValueTable::parse(self.axisValueTables.get(*offset as usize..)?)
     }
 
     pub fn get_axis_value_table_iter<'b>(&'b self) -> AxisValueTableIter<'b, 'a> {
@@ -129,14 +129,14 @@ impl<'a> StatTable<'a> {
 }
 
 #[derive(Debug)]
-pub enum AxisValueTable<'a> {
+pub enum AxisValueTable {
     Format1(AxisValueFormat1),
     Format2(AxisValueFormat2),
     Format3(AxisValueFormat3),
-    Format4(AxisValueFormat4<'a>),
+    Format4(AxisValueFormat4),
 }
 
-impl<'a> AxisValueTable<'a> {
+impl AxisValueTable {
     pub fn parse(data: &[u8]) -> Option<Self> {
         let mut s = Stream::new(data);
         let format: u16 = s.read()?;
@@ -164,11 +164,7 @@ impl<'a> AxisValueTable<'a> {
             AxisValueTable::Format1(x) => vec![x.axisIndex],
             AxisValueTable::Format2(x) => vec![x.axisIndex],
             AxisValueTable::Format3(x) => vec![x.axisIndex],
-            AxisValueTable::Format4(x) => x
-                .axisValues
-                .into_iter()
-                .map(|item| item.axisIndex)
-                .collect(),
+            AxisValueTable::Format4(x) => x.axisValues.iter().map(|item| item.axisIndex).collect(),
         }
     }
 }
@@ -277,12 +273,12 @@ impl FromData for AxisValueFormat3 {
 
 #[derive(Debug)]
 #[allow(non_snake_case)]
-pub struct AxisValueFormat4<'a> {
-    pub format: uint16,                       //Format identifier — set to 4.
+pub struct AxisValueFormat4 {
+    pub format: uint16,             //Format identifier — set to 4.
     pub axisCount: uint16, //The total number of axes contributing to this axis-values combination.
     pub flags: uint16,     //Flags — see below for details.
     pub valueNameID: uint16, //The name ID for entries in the 'name' table that provide a display string for this combination of axis values.
-    pub axisValues: LazyArray<'a, AxisValue>, // [axisCount]	Array of AxisValue records that provide the combination of axis values, one for each contributing axis.
+    pub axisValues: Vec<AxisValue>, // [axisCount]	Array of AxisValue records that provide the combination of axis values, one for each contributing axis.
 }
 
 #[derive(Debug)]
@@ -318,7 +314,7 @@ impl<'a, 'b> AxisValueTableIter<'a, 'b> {
 }
 
 impl<'a, 'b> Iterator for AxisValueTableIter<'a, 'b> {
-    type Item = AxisValueTable<'b>;
+    type Item = AxisValueTable;
     fn next(&mut self) -> Option<Self::Item> {
         if self.index < self.len() {
             self.index += 1;

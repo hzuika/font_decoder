@@ -2,17 +2,17 @@ use std::ops::Range;
 
 use crate::{
     data_types::{Offset16, Offset32},
-    decoder::{LazyArray, Stream},
+    decoder::Stream,
     head::LocaOffsetFormat,
 };
 
-pub enum LocaTable<'a> {
-    Short(LazyArray<'a, Offset16>), // [n] The actual local offset divided by 2 is stored. The value of n is numGlyphs + 1. The value for numGlyphs is found in the 'maxp' table.
-    Long(LazyArray<'a, Offset32>), // [n] The actual local offset is stored. The value of n is numGlyphs + 1. The value for numGlyphs is found in the 'maxp' table.
+pub enum LocaTable {
+    Short(Vec<Offset16>), // [n] The actual local offset divided by 2 is stored. The value of n is numGlyphs + 1. The value for numGlyphs is found in the 'maxp' table.
+    Long(Vec<Offset32>), // [n] The actual local offset is stored. The value of n is numGlyphs + 1. The value for numGlyphs is found in the 'maxp' table.
 }
 
-impl<'a> LocaTable<'a> {
-    pub fn parse(data: &'a [u8], format: LocaOffsetFormat, num_glyphs: u16) -> Option<Self> {
+impl LocaTable {
+    pub fn parse(data: &[u8], format: LocaOffsetFormat, num_glyphs: u16) -> Option<Self> {
         let mut s = Stream::new(data);
         match format {
             LocaOffsetFormat::Offset16 => {
@@ -42,13 +42,13 @@ impl<'a> LocaTable<'a> {
 
         let range = match self {
             Self::Short(offsets) => {
-                let start = offsets.get(glyph_id)? as usize * 2;
-                let end = offsets.get(next_glyph_id)? as usize * 2;
+                let start = *offsets.get(glyph_id)? as usize * 2;
+                let end = *offsets.get(next_glyph_id)? as usize * 2;
                 start..end
             }
             Self::Long(offsets) => {
-                let start = offsets.get(glyph_id)? as usize * 2;
-                let end = offsets.get(next_glyph_id)? as usize * 2;
+                let start = *offsets.get(glyph_id)? as usize * 2;
+                let end = *offsets.get(next_glyph_id)? as usize * 2;
                 start..end
             }
         };

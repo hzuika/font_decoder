@@ -16,7 +16,7 @@ fn main() {
         Some(stat) => {
             dbg!(&stat.header);
             let mut design_axes = vec![];
-            for (i, design_axis) in stat.designAxes.into_iter().enumerate() {
+            for (i, design_axis) in stat.designAxes.iter().enumerate() {
                 dbg!(i, &design_axis);
                 let name_id = design_axis.axisNameID;
                 let localized_strings = name.get_strings_by_name_id(NameID(name_id));
