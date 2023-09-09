@@ -1,13 +1,27 @@
+// glyf table は Glyph table が並べて格納される．
+// glyf table から特定の Glyph table を取得するためには，loca table が必要である．
+// loca table は glyf table の先頭から glyph id に対応する Glyph table のオフセットが格納される．
+// 1. loca table に glyph id を渡して， Glyph table が存在する範囲を取得する．
+// 2. glyf table から該当のバイト列を取得する．
+// 3. バイト列をパースする．
+// 4. Simple glyph table の場合は，そのままパースする．
+// 4. Composite glyph table の場合は，指定された glyph id を使って，1 から順に実行して，パースされた Simple glyph table を変形させる．
+
 use std::ops::Range;
 
 use crate::{
-    data_types::{int16, uint16, uint8},
+    data_types::{int16, uint16, uint8, F2DOT14},
     decoder::{FromData, LazyArray, Stream},
+    loca::LocaTable,
 };
 
+// glyf table 自体はただのバイト列を持つ．
+// どの範囲に Glyph table が存在するか自身では分からない．
+// glyph id に対応する Glyph table の範囲を取得するためには loca table の情報を使用する．
 pub struct GlyfTable<'a>(pub &'a [u8]);
 
 impl<'a> GlyfTable<'a> {
+    // loca table を使って取得した範囲のバイト列を取得する．
     pub fn get_data(&self, range: Range<usize>) -> Option<&'a [u8]> {
         self.0.get(range)
     }
@@ -15,43 +29,34 @@ impl<'a> GlyfTable<'a> {
 
 pub struct Glyph<'a> {
     pub header: GlyphHeader,
-    pub subtable: GlyphSubtable<'a>,
+    pub subtable: GlyphTable<'a>,
 }
 
 impl<'a> Glyph<'a> {
-    pub fn parse(data: &'a [u8]) -> Option<Self> {
+    pub fn parse(data: &'a [u8], loca: LocaTable<'a>, glyf: GlyfTable<'a>) -> Option<Self> {
         let mut s = Stream::new(data);
         let header: GlyphHeader = s.read()?;
         match header.get_type() {
             GlyphType::Simple => {
-                let subtable =
-                    SimpleGlyphTable::parse(s.get_tail()?, header.numberOfContours as u16)?;
+                let table = SimpleGlyphTable::parse(s.get_tail()?, header.numberOfContours as u16)?;
                 Some(Glyph {
                     header,
-                    subtable: GlyphSubtable::Simple(subtable),
+                    subtable: GlyphTable::Simple(table),
                 })
             }
             GlyphType::Composite => {
-                todo!()
+                let table = CompositeGlyphTable::parse(s.get_tail()?, loca, glyf);
+                Some(Glyph {
+                    header,
+                    subtable: GlyphTable::Composite(table),
+                })
             }
         }
     }
 }
 
-pub enum GlyphSubtable<'a> {
-    Simple(SimpleGlyphTable<'a>),
-    Composite,
-}
-
-impl<'a> GlyphSubtable<'a> {
-    pub fn get_glyph_points_iter(&self) -> &GlyphPointsIter<'a> {
-        match self {
-            Self::Simple(table) => &table.glyph_points_iter,
-            Self::Composite => todo!(),
-        }
-    }
-}
-
+// このヘッダーはバウンディングボックスの情報(xMin, yMin, xMax, yMax)を持っているが，正しいか分からないし，Variable fontの場合は結局バウンディングボックスの大きさが変わるので，この値は使うべきではない．
+// バウンディングボックスの情報が欲しい場合は計算したほうが良い．
 #[allow(non_snake_case)]
 pub struct GlyphHeader {
     pub numberOfContours: int16, // If the number of contours is greater than or equal to zero, this is a simple glyph. If negative, this is a composite glyph — the value -1 should be used for composite glyphs.
@@ -81,11 +86,7 @@ impl FromData for GlyphHeader {
     }
 }
 
-pub enum GlyphType {
-    Simple,
-    Composite,
-}
-
+// Glyph には二種類のタイプが存在し，それらは numberOfContours の値によって分類できます．
 impl GlyphHeader {
     pub fn get_type(&self) -> GlyphType {
         if self.numberOfContours >= 0 {
@@ -96,13 +97,34 @@ impl GlyphHeader {
     }
 }
 
+pub enum GlyphType {
+    Simple,
+    Composite,
+}
+
+// GlyphTable は GlyfTable と異なり，一つの glyph id に対応するグリフの点の座標のデータを持っている．
+pub enum GlyphTable<'a> {
+    Simple(SimpleGlyphTable<'a>),
+    Composite(CompositeGlyphTable<'a>),
+}
+
+impl<'a> GlyphTable<'a> {
+    // グリフの点の座標を順番に返すようなイテレータを返す．
+    pub fn get_glyph_points_iter(&self) -> &GlyphPointsIter<'a> {
+        match self {
+            Self::Simple(table) => &table.glyph_points_iter,
+            Self::Composite(table) => todo!(),
+        }
+    }
+}
+
 #[allow(non_snake_case)]
 pub struct SimpleGlyphTable<'a> {
     pub endPtsOfContours: LazyArray<'a, uint16>, //[numberOfContours]Array of point indices for the last point of each contour, in increasing numeric order.
     pub instructionLength: uint16, //Total number of bytes for instructions. If instructionLength is zero, no instructions are present for this glyph, and this field is followed directly by the flags field.
     pub instructions: LazyArray<'a, uint8>, //[instructionLength]Array of instruction byte code for the glyph.
+    // 仕様では，flags, xCoordinates, yCoordinates などが存在しますが，これらは可変で型が分からない配列なので，これらをまとめて GlyphPointsIter で表す．
     pub glyph_points_iter: GlyphPointsIter<'a>,
-    // flags, xCoordinates, yCoordinates をまとめて GlyphPointsIter で表す．
     // uint8 flags[variable]Array of flag elements. See below for details regarding the number of flag array elements.
     // uint8 or int16 xCoordinates[variable]Contour point x-coordinates. See below for details regarding the number of coordinate array elements. Coordinate for the first point is relative to (0,0); others are relative to previous point.
     // uint8 or int16 yCoordinates[variable]Contour point y-coordinates. See below for details regarding the number of coordinate array elements. Coordinate for the first point is relative to (0,0); others are relative to previous point.
@@ -116,7 +138,10 @@ impl<'a> SimpleGlyphTable<'a> {
         let number_of_points = endPtsOfContours.last()?.checked_add(1)?;
         let instructionLength = s.read()?;
         let instructions = s.read_array(instructionLength as usize)?;
+
+        // 仕様では，flags, xCoordinates, yCoordinates などが存在しますが，これらは可変で型が分からない配列なので，これらをまとめて GlyphPointsIter で表す．
         let flags_offset = s.get_offset();
+        // イテレータを構築するために，一度，各配列のバイト長を計算する．
         let (x_coords_len, y_coords_len) = get_coords_len(&mut s, number_of_points as usize)?;
         let x_coords_offset = s.get_offset();
         let y_coords_offset = x_coords_offset + x_coords_len;
@@ -142,15 +167,7 @@ impl<'a> SimpleGlyphTable<'a> {
     }
 }
 
-#[derive(Debug, Clone, Copy)]
-pub struct GlyphPoint {
-    pub x: i16,
-    pub y: i16,
-    pub is_on_curve: bool,
-    pub is_last: bool,
-}
-
-// TODO: GlyphContoursIter にしてもいいかもしれない．
+// TODO: GlyphContoursIter にしてもいいかもしれない．だが，輪郭ごとのイテレータだとしても，自分が輪郭を構成する最後の点であるという情報は必要になりそう．そうしないと，閉じるパスを作ることができない．
 #[derive(Clone)]
 pub struct GlyphPointsIter<'a> {
     endpoints: EndPointsIter<'a>,
@@ -178,6 +195,15 @@ impl<'a> Iterator for GlyphPointsIter<'a> {
             is_last,
         })
     }
+}
+
+// Glyph の点の座標と属性．
+#[derive(Debug, Clone, Copy)]
+pub struct GlyphPoint {
+    pub x: i16,
+    pub y: i16,
+    pub is_on_curve: bool,
+    pub is_last: bool,
 }
 
 // 輪郭の終点を指し示すイテレータ．
@@ -376,6 +402,7 @@ impl SimpleGlyphFlags {
     }
 }
 
+// x座標，y座標が格納された配列のバイト長を取得する．
 fn get_coords_len(s: &mut Stream, number_of_points: usize) -> Option<(usize, usize)> {
     let mut flags_left = number_of_points;
     let mut x_coords_len = 0;
@@ -398,4 +425,173 @@ fn get_coords_len(s: &mut Stream, number_of_points: usize) -> Option<(usize, usi
     }
 
     Some((x_coords_len, y_coords_len))
+}
+
+// Composite glyph table には，点の座標のデータは含まれていない．
+// 代わりに，自身とは別の glyph id と，その glyph id に対応する glyph をどのように変形させ，配置させるかの情報を持つ．
+// したがって， Composite Glyph Table 自身の glyph の点を取得するためには， loca table と glyf table が必要になる．
+pub struct CompositeGlyphTable<'a> {
+    pub iter: CompositeGlyphIter<'a>,
+    pub loca: LocaTable<'a>,
+    pub glyf: GlyfTable<'a>,
+}
+
+impl<'a> CompositeGlyphTable<'a> {
+    pub fn parse(data: &'a [u8], loca: LocaTable<'a>, glyf: GlyfTable<'a>) -> Self {
+        let iter = CompositeGlyphIter::new(data);
+        Self { iter, loca, glyf }
+    }
+}
+
+// Composite glyph が構成するためのコンポーネントを返すイテレータ
+pub struct CompositeGlyphIter<'a> {
+    stream: Stream<'a>,
+}
+
+impl<'a> CompositeGlyphIter<'a> {
+    pub fn new(data: &'a [u8]) -> Self {
+        Self {
+            stream: Stream::new(data),
+        }
+    }
+}
+
+// Composite Glyph を構成するコンポーネント．
+pub struct CompositeGlyphComponent {
+    pub glyph_id: u16,
+    pub transform: Transform,
+    pub flags: CompositeGlyphFlags,
+    pub parent_glyph_point_number: Option<u16>, // Component glyph を構築した後のポイントから，番号を指定して取得する必要がある．Vecが必要?
+    pub child_glyph_point_number: Option<u16>,
+}
+
+impl<'a> Iterator for CompositeGlyphIter<'a> {
+    type Item = CompositeGlyphComponent;
+    fn next(&mut self) -> Option<Self::Item> {
+        let flags = CompositeGlyphFlags(self.stream.read()?);
+        let glyph_id = self.stream.read::<u16>()?;
+
+        let mut transform = Transform::default();
+
+        let mut parent_glyph_point_number = None;
+        let mut child_glyph_point_number = None;
+
+        if flags.args_are_xy_values() {
+            // コンポーネントグリフの各制御点の座標に追加されるオフセットベクトル．
+            // Variable font の場合は， gvar table のデルタによってオフセットベクトルを変更できる．
+            // オフセットベクトルに変換行列を適用するかどうかは，SCALED_COMPONENT_OFFSET と UNSCALED_COMPONENT_OFFSET フラグによって決定する．
+            if flags.arg_1_and_2_are_16bit() {
+                transform.e = f32::from(self.stream.read::<i16>()?);
+                transform.f = f32::from(self.stream.read::<i16>()?);
+            } else {
+                transform.e = f32::from(self.stream.read::<i8>()?);
+                transform.f = f32::from(self.stream.read::<i8>()?);
+            }
+        } else {
+            // unsigned point numbers.
+            if flags.arg_1_and_2_are_16bit() {
+                // 以前のコンポーネントグリフから組み込まれ，再番号付けされた輪郭からのポイント番号．
+                parent_glyph_point_number = Some(self.stream.read::<u16>()?);
+                // 子コンポーネントグリフの再番号付け前のポイント番号．
+                // このポイント番号にある制御点を，親グリフのポイント番号にある制御点に一致するように子コンポーネントグリフを配置する．
+                // 変換行列が指定されている場合は，位置合わせの前に，子のグリフに変換が適用される．
+                child_glyph_point_number = Some(self.stream.read::<u16>()?);
+            } else {
+                parent_glyph_point_number = Some(self.stream.read::<u8>()? as u16);
+                child_glyph_point_number = Some(self.stream.read::<u8>()? as u16);
+            }
+        }
+
+        if flags.we_have_a_two_by_two() {
+            transform.a = self.stream.read::<F2DOT14>()?.to_f32();
+            transform.b = self.stream.read::<F2DOT14>()?.to_f32();
+            transform.c = self.stream.read::<F2DOT14>()?.to_f32();
+            transform.d = self.stream.read::<F2DOT14>()?.to_f32();
+        } else if flags.we_have_an_x_and_y_scale() {
+            transform.a = self.stream.read::<F2DOT14>()?.to_f32();
+            transform.d = self.stream.read::<F2DOT14>()?.to_f32();
+        } else if flags.we_have_a_scale() {
+            transform.a = self.stream.read::<F2DOT14>()?.to_f32();
+            transform.d = transform.a;
+        }
+
+        if !flags.more_components() {
+            // ここで offset を最後まで移動させておくことで，次の next() 呼び出し時に，最初の get() で None を返す．
+            self.stream.set_end();
+        }
+
+        Some(CompositeGlyphComponent {
+            glyph_id,
+            transform,
+            flags,
+            parent_glyph_point_number,
+            child_glyph_point_number,
+        })
+    }
+}
+
+// コンポーネントのフラグ．
+pub struct CompositeGlyphFlags(u16);
+
+impl CompositeGlyphFlags {
+    pub const ARG_1_AND_2_ARE_WORDS: u16 = 0x0001; //Bit 0: If this is set, the arguments are 16-bit (uint16 or int16); otherwise, they are bytes (uint8 or int8).
+    pub const ARGS_ARE_XY_VALUES: u16 = 0x0002; //Bit 1: If this is set, the arguments are signed xy values; otherwise, they are unsigned point numbers.
+    pub const ROUND_XY_TO_GRID: u16 = 0x0004; //Bit 2: If set and ARGS_ARE_XY_VALUES is also set, the xy values are rounded to the nearest grid line. Ignored if ARGS_ARE_XY_VALUES is not set. 変換行列と，Variable font の delta が適用された後の オフセットベクトルを最も近いピクセルグリッドラインにフィットさせる．
+    pub const WE_HAVE_A_SCALE: u16 = 0x0008; //Bit 3: This indicates that there is a simple scale for the component. Otherwise, scale = 1.0.
+    pub const MORE_COMPONENTS: u16 = 0x0020; //Bit 5: Indicates at least one more glyph after this one.
+    pub const WE_HAVE_AN_X_AND_Y_SCALE: u16 = 0x0040; //Bit 6: The x direction will use a different scale from the y direction.
+    pub const WE_HAVE_A_TWO_BY_TWO: u16 = 0x0080; //Bit 7: There is a 2 by 2 transformation that will be used to scale the component.
+    pub const WE_HAVE_INSTRUCTIONS: u16 = 0x0100; //Bit 8: Following the last component are instructions for the composite character.
+    pub const USE_MY_METRICS: u16 = 0x0200; //Bit 9: If set, this forces the aw and lsb (and rsb) for the composite to be equal to those from this component glyph. This works for hinted and unhinted glyphs.
+    pub const OVERLAP_COMPOUND: u16 = 0x0400; //Bit 10: If set, the components of the compound glyph overlap. Use of this flag is not required in OpenType — that is, it is valid to have components overlap without having this flag set. It may affect behaviors in some platforms, however. (See Apple’s specification for details regarding behavior in Apple platforms.) When used, it must be set on the flag word for the first component. See additional remarks, above, for the similar OVERLAP_SIMPLE flag used in simple-glyph descriptions.
+    pub const SCALED_COMPONENT_OFFSET: u16 = 0x0800; //Bit 11: The composite is designed to have the component offset scaled. Ignored if ARGS_ARE_XY_VALUES is not set.
+    pub const UNSCALED_COMPONENT_OFFSET: u16 = 0x1000; //Bit 12: The composite is designed not to have the component offset scaled. Ignored if ARGS_ARE_XY_VALUES is not set.
+    fn args_are_xy_values(&self) -> bool {
+        self.0 & Self::ARGS_ARE_XY_VALUES != 0
+    }
+    fn arg_1_and_2_are_16bit(&self) -> bool {
+        self.0 & Self::ARG_1_AND_2_ARE_WORDS != 0
+    }
+
+    fn we_have_a_two_by_two(&self) -> bool {
+        self.0 & Self::WE_HAVE_A_TWO_BY_TWO != 0
+    }
+
+    fn we_have_an_x_and_y_scale(&self) -> bool {
+        self.0 & Self::WE_HAVE_AN_X_AND_Y_SCALE != 0
+    }
+
+    fn we_have_a_scale(&self) -> bool {
+        self.0 & Self::WE_HAVE_A_SCALE != 0
+    }
+
+    fn more_components(&self) -> bool {
+        self.0 & Self::MORE_COMPONENTS != 0
+    }
+}
+
+// コンポーネントを変形させるための行列．
+// [a b e]
+// [d d f]
+pub struct Transform {
+    pub a: f32,
+    pub b: f32,
+    pub c: f32,
+    pub d: f32,
+    pub e: f32,
+    pub f: f32,
+}
+
+impl Default for Transform {
+    #[inline]
+    fn default() -> Self {
+        Transform {
+            a: 1.0,
+            b: 0.0,
+            c: 0.0,
+            d: 1.0,
+            e: 0.0,
+            f: 0.0,
+        }
+    }
 }

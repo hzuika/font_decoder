@@ -21,7 +21,7 @@ fn callback(table: &Table) {
                 if let Some(glyph_id) = glyph_id {
                     if let Some(range) = loca.get_glyf_range(glyph_id) {
                         let data = glyf.get_data(range).unwrap();
-                        let glyph = Glyph::parse(data).unwrap();
+                        let glyph = Glyph::parse(data, loca, glyf).unwrap();
                         let it = glyph.subtable.get_glyph_points_iter();
                         for point in it.clone() {
                             dbg!(point);
