@@ -1,7 +1,7 @@
 use std::{fs::File, io::Read};
 
 use font_decoder::{
-    glyf::Glyph,
+    glyf::{Glyph, GlyphTable},
     table::{is_ttc, Collection, Table},
 };
 
@@ -17,14 +17,23 @@ fn callback(table: &Table) {
     for item in &cmap.header.encodingRecords {
         match cmap.get_subtable(&item) {
             Some(subtable) => {
-                let glyph_id = subtable.get_glyph_id('L');
+                let code_point = 'š';
+                println!("U+{:x}", code_point as u32);
+                let glyph_id = subtable.get_glyph_id(code_point);
+                dbg!(glyph_id);
                 if let Some(glyph_id) = glyph_id {
                     if let Some(range) = loca.get_glyf_range(glyph_id) {
                         let data = glyf.get_data(range).unwrap();
                         let glyph = Glyph::parse(data).unwrap();
+                        match &glyph.subtable {
+                            GlyphTable::Simple(_table) => {}
+                            GlyphTable::Composite(table) => {
+                                dbg!(&table.components);
+                            }
+                        }
                         let points = glyph.get_points(&loca, &glyf);
                         dbg!(&points);
-                        // break;
+                        break;
                     }
                 }
             }

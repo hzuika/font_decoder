@@ -17,18 +17,27 @@ fn callback(table: &Table) {
     for item in &cmap.header.encodingRecords {
         match cmap.get_subtable(&item) {
             Some(subtable) => {
-                let glyph_id = subtable.get_glyph_id('L');
-                if let Some(glyph_id) = glyph_id {
+                let map = subtable.get_code_point_glyph_id_map();
+                for (c, glyph_id) in map {
+                    dbg!(c);
+                    dbg!(glyph_id);
                     if let Some(range) = loca.get_glyf_range(glyph_id) {
+                        dbg!(&range);
                         let data = glyf.get_data(range).unwrap();
                         let glyph = Glyph::parse(data).unwrap();
                         let points = glyph.get_points(&loca, &glyf);
                         dbg!(&points);
                         // break;
+                    } else {
+                        // glyph range が存在しない文字もある．
                     }
                 }
+                // cmap subtable は一つだけ列挙する．
+                return;
             }
-            None => {}
+            None => {
+                panic!("cmap subtable が存在しないはずがない．");
+            }
         }
     }
 }
