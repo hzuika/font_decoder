@@ -1,5 +1,3 @@
-use std::collections::HashMap;
-
 use crate::{
     data_types::{int16, uint16, Offset32},
     decoder::{FromData, Stream},
@@ -82,7 +80,7 @@ impl CmapSubtable {
     }
 
     // TODO: Iterator
-    pub fn get_code_point_glyph_id_map(&self) -> HashMap<char, u16> {
+    pub fn get_code_point_glyph_id_map(&self) -> Vec<(char, u16)> {
         match self {
             Self::Format4(x) => x.get_code_point_glyph_id_map(),
             _ => todo!(),
@@ -202,8 +200,8 @@ impl CmapSubtableFormat4 {
         return Some(0); // notdef.
     }
 
-    pub fn get_code_point_glyph_id_map(&self) -> HashMap<char, u16> {
-        let mut map = HashMap::new();
+    pub fn get_code_point_glyph_id_map(&self) -> Vec<(char, u16)> {
+        let mut map = Vec::new();
         for (i, start_code_point) in self.startCode.iter().enumerate() {
             let end_code_point = *self.endCode.get(i).unwrap();
             let id_delta = *self.idDelta.get(i).unwrap();
@@ -220,7 +218,7 @@ impl CmapSubtableFormat4 {
                     let glyph_id_array_index = gid_array_index + delta;
                     *self.glyphIdArray.get(glyph_id_array_index).unwrap()
                 };
-                map.insert(char::from_u32(code_point as u32).unwrap(), glyph_id);
+                map.push((char::from_u32(code_point as u32).unwrap(), glyph_id));
             }
         }
         map
