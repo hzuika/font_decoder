@@ -1,4 +1,4 @@
-use std::ops::Range;
+use core::ops::Range;
 
 use crate::{
     data_types::{Offset16, Offset32},
@@ -6,6 +6,7 @@ use crate::{
     head::LocaOffsetFormat,
 };
 
+#[derive(Debug)]
 pub enum LocaTable {
     Short(Vec<Offset16>), // [n] The actual local offset divided by 2 is stored. The value of n is numGlyphs + 1. The value for numGlyphs is found in the 'maxp' table.
     Long(Vec<Offset32>), // [n] The actual local offset is stored. The value of n is numGlyphs + 1. The value for numGlyphs is found in the 'maxp' table.
@@ -23,6 +24,13 @@ impl LocaTable {
                 let offsets = s.read_array(num_glyphs as usize + 1)?;
                 Some(Self::Long(offsets))
             }
+        }
+    }
+
+    pub fn at(&self, index: usize) -> usize {
+        match self {
+            Self::Short(offsets) => offsets[index] as usize,
+            Self::Long(offsets) => offsets[index] as usize,
         }
     }
 
@@ -47,8 +55,8 @@ impl LocaTable {
                 start..end
             }
             Self::Long(offsets) => {
-                let start = *offsets.get(glyph_id)? as usize * 2;
-                let end = *offsets.get(next_glyph_id)? as usize * 2;
+                let start = *offsets.get(glyph_id)? as usize;
+                let end = *offsets.get(next_glyph_id)? as usize;
                 start..end
             }
         };
