@@ -47,7 +47,7 @@ impl Glyph {
         }
     }
 
-    pub fn get_points(&self, loca: &LocaTable, glyf: &GlyfTable<'_>) -> Vec<GlyphPoint> {
+    pub fn get_points(&self, loca: &LocaTable, glyf: &GlyfTable<'_>) -> (Vec<GlyphPoint>, BBox) {
         match &self.subtable {
             GlyphTable::Simple(table) => table.get_points(),
             GlyphTable::Composite(table) => table.get_points(loca, glyf),
@@ -180,12 +180,16 @@ impl SimpleGlyphTable {
         })
     }
 
-    fn get_points(&self) -> Vec<GlyphPoint> {
+    fn get_points(&self) -> (Vec<GlyphPoint>, BBox) {
         let mut points = vec![];
+        let mut bbox = BBox::default();
         for i in 0..self.flags.len() as usize {
+            let x = f64::from(self.xCoordinates[i]);
+            let y = f64::from(self.yCoordinates[i]);
+            bbox.update(x, y);
             points.push(GlyphPoint {
-                x: f64::from(self.xCoordinates[i]),
-                y: f64::from(self.yCoordinates[i]),
+                x,
+                y,
                 flags: self.flags[i],
                 is_last: self
                     .endPtsOfContours
@@ -194,7 +198,7 @@ impl SimpleGlyphTable {
                     .is_some(),
             })
         }
-        points
+        (points, bbox)
     }
 }
 
@@ -379,15 +383,16 @@ impl CompositeGlyphTable {
         Some(Self { components })
     }
 
-    pub fn get_points(&self, loca: &LocaTable, glyf: &GlyfTable<'_>) -> Vec<GlyphPoint> {
+    pub fn get_points(&self, loca: &LocaTable, glyf: &GlyfTable<'_>) -> (Vec<GlyphPoint>, BBox) {
         let mut v: Vec<GlyphPoint> = vec![];
+        let mut bbox = BBox::default();
         for component in &self.components {
             let glyph_id = component.glyph_id;
             // Composite glyph を構成する Glyph は必ず存在するので， unwrap() を使う．
             let range = loca.get_glyf_range(glyph_id).unwrap();
             let data = glyf.get_data(range).unwrap();
             let glyph = Glyph::parse(data).unwrap();
-            let mut points = glyph.get_points(loca, glyf);
+            let (mut points, _) = glyph.get_points(loca, glyf);
             for point in &mut points {
                 (point.x, point.y) = component.transform.multiply(point.x, point.y);
             }
@@ -403,6 +408,7 @@ impl CompositeGlyphTable {
                     // オフセットを行う
                     for point in &mut points {
                         (point.x, point.y) = (point.x + x, point.y + y);
+                        bbox.update(point.x, point.y);
                     }
                 }
                 CompositeGlyphArgs::Point { parent, child } => {
@@ -413,12 +419,13 @@ impl CompositeGlyphTable {
                     let (x, y) = (parent.x - child.x, parent.y - child.y);
                     for point in &mut points {
                         (point.x, point.y) = (point.x + x, point.y + y);
+                        bbox.update(point.x, point.y);
                     }
                 }
             }
             v.extend(points);
         }
-        v
+        (v, bbox)
     }
 }
 
@@ -525,6 +532,34 @@ impl Default for Transform {
             b: 0.0,
             c: 0.0,
             d: 1.0,
+        }
+    }
+}
+
+#[derive(Debug, Clone, Copy)]
+pub struct BBox {
+    pub xmin: f64,
+    pub ymin: f64,
+    pub xmax: f64,
+    pub ymax: f64,
+}
+
+impl BBox {
+    fn update(&mut self, x: f64, y: f64) {
+        self.xmin = self.xmin.min(x);
+        self.ymin = self.ymin.min(y);
+        self.xmax = self.xmax.max(x);
+        self.ymax = self.ymax.max(y);
+    }
+}
+
+impl Default for BBox {
+    fn default() -> Self {
+        Self {
+            xmin: 0.0,
+            ymin: 0.0,
+            xmax: 0.0,
+            ymax: 0.0,
         }
     }
 }
