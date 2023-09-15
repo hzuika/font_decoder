@@ -1,9 +1,11 @@
 use crate::{
     data_types::{int16, uint16, uint32, Fixed, LONGDATETIME},
     decoder::Stream,
+    glyf::BBox,
 };
 
 #[allow(non_snake_case)]
+#[derive(Debug)]
 pub struct HeadTable {
     pub majorVersion: uint16, //Major version number of the font header table — set to 1.
     pub minorVersion: uint16, //Minor version number of the font header table — set to 0.
@@ -101,8 +103,24 @@ impl HeadTable {
             _ => panic!("invalid indexToLocFormat {}", self.indexToLocFormat),
         }
     }
-}
 
+    pub fn get_units_per_em(&self) -> u16 {
+        self.unitsPerEm
+    }
+
+    pub fn get_bbox(&self) -> BBox {
+        let xmin = f64::from(self.xMin);
+        let ymin = f64::from(self.yMin);
+        let xmax = f64::from(self.xMax);
+        let ymax = f64::from(self.yMax);
+        BBox {
+            xmin,
+            ymin,
+            xmax,
+            ymax,
+        }
+    }
+}
 pub enum LocaOffsetFormat {
     Offset16,
     Offset32,
