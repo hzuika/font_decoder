@@ -5,6 +5,7 @@ use crate::{
     decoder::{FromData, Stream},
 };
 
+#[derive(Clone, Copy, PartialEq, Eq)]
 pub struct Weight(pub u16);
 impl FromData for Weight {
     const SIZE: usize = u16::SIZE;
@@ -164,5 +165,13 @@ impl OS2Table {
             usLowerOpticalPointSize,
             usUpperOpticalPointSize,
         })
+    }
+
+    pub fn is_regular(&self) -> bool {
+        self.fsSelection & (1 << 6) != 0
+    }
+
+    pub fn get_weight(&self) -> Weight {
+        self.usWeightClass
     }
 }
