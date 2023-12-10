@@ -3,6 +3,7 @@ pub mod data_types;
 pub mod decoder;
 pub mod fvar;
 pub mod glyf;
+pub mod gsub;
 pub mod head;
 pub mod id;
 pub mod loca;

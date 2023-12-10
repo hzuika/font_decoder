@@ -1,9 +1,12 @@
 use crate::{
     cmap::CmapTable,
-    data_types::{Offset32, TableTag, Tag, CMAP, FVAR, GLYF, HEAD, LOCA, MAXP, NAME, OS_2, STAT},
+    data_types::{
+        Offset32, TableTag, Tag, CMAP, FVAR, GLYF, GSUB, HEAD, LOCA, MAXP, NAME, OS_2, STAT,
+    },
     decoder::{FromData, Stream},
     fvar::FvarTable,
     glyf::GlyfTable,
+    gsub::GsubTable,
     head::{HeadTable, LocaOffsetFormat},
     loca::LocaTable,
     maxp::MaxpTable,
@@ -218,5 +221,10 @@ impl<'a> Table<'a> {
 
     pub fn get_glyf_table(&self) -> Option<GlyfTable<'a>> {
         self.get_table_data(&GLYF).map(GlyfTable)
+    }
+
+    pub fn get_gsub_table(&self) -> Option<GsubTable<'a>> {
+        self.get_table_data(&GSUB)
+            .and_then(|data| GsubTable::parse(data))
     }
 }
