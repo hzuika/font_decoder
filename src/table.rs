@@ -70,8 +70,9 @@ pub fn is_ttc(data: &[u8]) -> Option<bool> {
 fn check_sfnt_version(sfnt_version: &Tag) {
     const TRUETYPE: Tag = Tag(0x00010000);
     const CFF: Tag = Tag::from_be_bytes(*b"OTTO");
+    const TRUE: Tag = Tag::from_be_bytes(*b"true");
     assert!(
-        sfnt_version == &TRUETYPE || sfnt_version == &CFF,
+        sfnt_version == &TRUETYPE || sfnt_version == &CFF || sfnt_version == &TRUE,
         "invalid sfnt version 0x{:x}",
         sfnt_version.0
     );

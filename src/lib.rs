@@ -7,6 +7,7 @@ pub mod head;
 pub mod id;
 pub mod loca;
 pub mod maxp;
+pub mod morx;
 pub mod name;
 pub mod os_2;
 pub mod stat;

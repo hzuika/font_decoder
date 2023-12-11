@@ -1,0 +1,62 @@
+/System/Library/Fonts/Apple Color Emoji.ttc
+/System/Library/Fonts/Apple Color Emoji.ttc
+/System/Library/Fonts/Supplemental/Ayuthaya.ttf
+/System/Library/Fonts/Supplemental/Bangla MN.ttc
+/System/Library/Fonts/Supplemental/Bangla MN.ttc
+/System/Library/Fonts/Supplemental/Bangla Sangam MN.ttc
+/System/Library/Fonts/Supplemental/Bangla Sangam MN.ttc
+/System/Library/Fonts/Supplemental/Devanagari Sangam MN.ttc
+/System/Library/Fonts/Supplemental/Devanagari Sangam MN.ttc
+/System/Library/Fonts/Supplemental/Devanagari Sangam MN.ttc
+/System/Library/Fonts/Supplemental/DevanagariMT.ttc
+/System/Library/Fonts/Supplemental/DevanagariMT.ttc
+/System/Library/Fonts/Supplemental/Gujarati Sangam MN.ttc
+/System/Library/Fonts/Supplemental/Gujarati Sangam MN.ttc
+/System/Library/Fonts/Supplemental/GujaratiMT.ttc
+/System/Library/Fonts/Supplemental/GujaratiMT.ttc
+/System/Library/Fonts/Supplemental/Gurmukhi MN.ttc
+/System/Library/Fonts/Supplemental/Gurmukhi Sangam MN.ttc
+/System/Library/Fonts/Supplemental/Gurmukhi.ttf
+/System/Library/Fonts/Supplemental/InaiMathi-MN.ttc
+/System/Library/Fonts/Supplemental/Kannada MN.ttc
+/System/Library/Fonts/Supplemental/Kannada MN.ttc
+/System/Library/Fonts/Supplemental/Kannada MN.ttc
+/System/Library/Fonts/Supplemental/Kannada Sangam MN.ttc
+/System/Library/Fonts/Supplemental/Kannada Sangam MN.ttc
+/System/Library/Fonts/Supplemental/Kannada Sangam MN.ttc
+/System/Library/Fonts/Supplemental/Khmer MN.ttc
+/System/Library/Fonts/Supplemental/Khmer MN.ttc
+/System/Library/Fonts/Supplemental/Khmer MN.ttc
+/System/Library/Fonts/Supplemental/Khmer Sangam MN.ttf
+/System/Library/Fonts/Supplemental/Khmer Sangam MN.ttf
+/System/Library/Fonts/Supplemental/Khmer Sangam MN.ttf
+/System/Library/Fonts/Supplemental/Krungthep.ttf
+/System/Library/Fonts/Supplemental/Malayalam MN.ttc
+/System/Library/Fonts/Supplemental/Malayalam MN.ttc
+/System/Library/Fonts/Supplemental/Malayalam Sangam MN.ttc
+/System/Library/Fonts/Supplemental/Malayalam Sangam MN.ttc
+/System/Library/Fonts/Supplemental/Myanmar MN.ttc
+/System/Library/Fonts/Supplemental/Myanmar MN.ttc
+/System/Library/Fonts/Supplemental/Myanmar MN.ttc
+/System/Library/Fonts/Supplemental/Myanmar MN.ttc
+/System/Library/Fonts/Supplemental/Myanmar Sangam MN.ttc
+/System/Library/Fonts/Supplemental/Myanmar Sangam MN.ttc
+/System/Library/Fonts/Supplemental/Myanmar Sangam MN.ttc
+/System/Library/Fonts/Supplemental/Myanmar Sangam MN.ttc
+/System/Library/Fonts/Supplemental/Oriya MN.ttc
+/System/Library/Fonts/Supplemental/Oriya MN.ttc
+/System/Library/Fonts/Supplemental/Oriya MN.ttc
+/System/Library/Fonts/Supplemental/Oriya MN.ttc
+/System/Library/Fonts/Supplemental/Oriya MN.ttc
+/System/Library/Fonts/Supplemental/Oriya Sangam MN.ttc
+/System/Library/Fonts/Supplemental/Oriya Sangam MN.ttc
+/System/Library/Fonts/Supplemental/Oriya Sangam MN.ttc
+/System/Library/Fonts/Supplemental/Oriya Sangam MN.ttc
+/System/Library/Fonts/Supplemental/Oriya Sangam MN.ttc
+/System/Library/Fonts/Supplemental/Sathu.ttf
+/System/Library/Fonts/Supplemental/Silom.ttf
+/System/Library/Fonts/Supplemental/Sinhala MN.ttc
+/System/Library/Fonts/Supplemental/Sinhala Sangam MN.ttc
+/System/Library/Fonts/Supplemental/Tamil MN.ttc
+/System/Library/Fonts/Supplemental/Telugu MN.ttc
+/System/Library/Fonts/Supplemental/Telugu Sangam MN.ttc
