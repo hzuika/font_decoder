@@ -41,21 +41,30 @@ impl GsubHeader {
 
 #[derive(Debug)]
 #[allow(non_snake_case)]
-pub struct ScriptList {
+pub struct ScriptList<'a> {
+    pub data: &'a [u8],
     pub scriptCount: uint16,              // Number of ScriptRecords
     pub scriptRecords: Vec<ScriptRecord>, // Array of ScriptRecords, listed alphabetically by script tag
 }
 
-impl ScriptList {
+impl<'a> ScriptList<'a> {
     #[allow(non_snake_case)]
-    pub fn parse(data: &[u8]) -> Option<Self> {
+    pub fn parse(data: &'a [u8]) -> Option<Self> {
         let mut s = Stream::new(data);
         let scriptCount: u16 = s.read()?;
         let scriptRecords = s.read_array(scriptCount as _)?;
         Some(Self {
+            data,
             scriptCount,
             scriptRecords,
         })
+    }
+
+    pub fn get(&self, index: usize) -> Option<Script> {
+        self.scriptRecords
+            .get(index)
+            .and_then(|x| self.data.get(x.scriptOffset as usize..))
+            .and_then(Script::parse)
     }
 }
 
@@ -79,24 +88,43 @@ impl FromData for ScriptRecord {
 
 #[derive(Debug)]
 #[allow(non_snake_case)]
-pub struct Script {
+pub struct Script<'a> {
+    pub data: &'a [u8],
     pub defaultLangSysOffset: Offset16, // Offset to default LangSys table, from beginning of Script table — may be NULL
     pub langSysCount: uint16, // Number of LangSysRecords for this script — excluding the default LangSys
     pub langSysRecords: Vec<LangSysRecord>, // Array of LangSysRecords, listed alphabetically by LangSys tag
 }
 
-impl Script {
+impl<'a> Script<'a> {
     #[allow(non_snake_case)]
-    pub fn parse(data: &[u8]) -> Option<Self> {
+    pub fn parse(data: &'a [u8]) -> Option<Self> {
         let mut s = Stream::new(data);
         let defaultLangSysOffset = s.read()?;
         let langSysCount: u16 = s.read()?;
         let langSysRecords = s.read_array(langSysCount as _)?;
         Some(Self {
+            data,
             defaultLangSysOffset,
             langSysCount,
             langSysRecords,
         })
+    }
+
+    pub fn get_default_lang_sys_table(&self) -> Option<LangSys> {
+        if self.defaultLangSysOffset == 0 {
+            None
+        } else {
+            self.data
+                .get(self.defaultLangSysOffset as usize..)
+                .and_then(LangSys::parse)
+        }
+    }
+
+    pub fn get(&self, index: usize) -> Option<LangSys> {
+        self.langSysRecords
+            .get(index)
+            .and_then(|x| self.data.get(x.langSysOffset as usize..))
+            .and_then(LangSys::parse)
     }
 }
 
@@ -146,21 +174,30 @@ impl LangSys {
 
 #[derive(Debug)]
 #[allow(non_snake_case)]
-pub struct FeatureList {
+pub struct FeatureList<'a> {
+    pub data: &'a [u8],
     pub featureCount: uint16, // Number of FeatureRecords in this table
     pub featureRecords: Vec<FeatureRecord>, // Array of FeatureRecords — zero-based (first feature has FeatureIndex = 0), listed alphabetically by feature tag
 }
 
-impl FeatureList {
+impl<'a> FeatureList<'a> {
     #[allow(non_snake_case)]
-    pub fn parse(data: &[u8]) -> Option<Self> {
+    pub fn parse(data: &'a [u8]) -> Option<Self> {
         let mut s = Stream::new(data);
         let featureCount = s.read()?;
         let featureRecords = s.read_array(featureCount as _)?;
         Some(Self {
+            data,
             featureCount,
             featureRecords,
         })
+    }
+
+    pub fn get(&self, index: usize) -> Option<Feature> {
+        self.featureRecords
+            .get(index)
+            .and_then(|x| self.data.get(x.featureOffset as usize..))
+            .and_then(Feature::parse)
     }
 }
 
@@ -207,48 +244,59 @@ impl Feature {
 
 #[derive(Debug)]
 #[allow(non_snake_case)]
-pub struct LookupList {
+pub struct LookupList<'a> {
+    pub data: &'a [u8],
     pub lookupCount: uint16,          // Number of lookups in this table
     pub lookupOffsets: Vec<Offset16>, // Array of offsets to Lookup tables, from beginning of LookupList — zero based (first lookup is Lookup index = 0)
 }
 
-impl LookupList {
+impl<'a> LookupList<'a> {
     #[allow(non_snake_case)]
-    pub fn parse(data: &[u8]) -> Option<Self> {
+    pub fn parse(data: &'a [u8]) -> Option<Self> {
         let mut s = Stream::new(data);
         let lookupCount = s.read()?;
         let lookupOffsets = s.read_array(lookupCount as _)?;
         Some(Self {
+            data,
             lookupCount,
             lookupOffsets,
         })
+    }
+
+    pub fn get(&self, index: usize) -> Option<Lookup> {
+        self.lookupOffsets
+            .get(index)
+            .and_then(|x| self.data.get(*x as usize..))
+            .and_then(Lookup::parse)
     }
 }
 
 #[derive(Debug)]
 #[allow(non_snake_case)]
-pub struct Lookup {
-    pub lookupType: uint16,             // Different enumerations for GSUB and GPOS
-    pub lookupFlag: uint16,             // Lookup qualifiers
-    pub subTableCount: uint16,          // Number of subtables for this lookup
-    pub subtableOffsets: Vec<Offset16>, // Array of offsets to lookup subtables, from beginning of Lookup table
+pub struct Lookup<'a> {
+    pub data: &'a [u8],
+    pub lookupType: uint16,    // Different enumerations for GSUB and GPOS
+    pub lookupFlag: uint16,    // Lookup qualifiers
+    pub subTableCount: uint16, // Number of subtables for this lookup
+    pub subTableOffsets: Vec<Offset16>, // Array of offsets to lookup subtables, from beginning of Lookup table
     pub markFilteringSet: uint16, // Index (base 0) into GDEF mark glyph sets structure. This field is only present if the USE_MARK_FILTERING_SET lookup flag is set.
 }
 
-impl Lookup {
+impl<'a> Lookup<'a> {
     #[allow(non_snake_case)]
-    pub fn parse(data: &[u8]) -> Option<Self> {
+    pub fn parse(data: &'a [u8]) -> Option<Self> {
         let mut s = Stream::new(data);
         let lookupType = s.read()?;
         let lookupFlag = s.read()?;
         let subTableCount: u16 = s.read()?;
-        let subtableOffsets = s.read_array(subTableCount as _)?;
+        let subTableOffsets = s.read_array(subTableCount as _)?;
         let markFilteringSet = s.read()?;
         Some(Self {
+            data,
             lookupType,
             lookupFlag,
             subTableCount,
-            subtableOffsets,
+            subTableOffsets,
             markFilteringSet,
         })
     }
@@ -256,11 +304,10 @@ impl Lookup {
 
 #[derive(Debug)]
 pub struct GsubTable<'a> {
-    pub data: &'a [u8],
     pub header: GsubHeader,
-    pub script_list: ScriptList,
-    pub feature_list: FeatureList,
-    pub lookup_list: LookupList,
+    pub script_list: ScriptList<'a>,
+    pub feature_list: FeatureList<'a>,
+    pub lookup_list: LookupList<'a>,
 }
 
 impl<'a> GsubTable<'a> {
@@ -270,7 +317,6 @@ impl<'a> GsubTable<'a> {
         let feature_list = FeatureList::parse(data.get(header.featureListOffset as _..)?)?;
         let lookup_list = LookupList::parse(data.get(header.lookupListOffset as _..)?)?;
         Some(Self {
-            data,
             header,
             script_list,
             feature_list,
