@@ -73,14 +73,10 @@ pub fn is_ttc(data: &[u8]) -> bool {
     }
 }
 
-fn check_sfnt_version(sfnt_version: &Tag) {
+fn is_sfnt_version(sfnt_version: &Tag) -> bool {
     const TRUETYPE: Tag = Tag(0x00010000);
     const CFF: Tag = Tag::from_be_bytes(*b"OTTO");
-    assert!(
-        sfnt_version == &TRUETYPE || sfnt_version == &CFF,
-        "invalid sfnt version 0x{:x}",
-        sfnt_version.0
-    );
+    sfnt_version == &TRUETYPE || sfnt_version == &CFF
 }
 
 #[allow(non_snake_case)]
@@ -119,7 +115,9 @@ impl TableDirectory {
     pub fn parse(data: &[u8]) -> Option<Self> {
         let mut s = Stream::new(data);
         let sfnt_version: Tag = s.read()?;
-        check_sfnt_version(&sfnt_version);
+        if !is_sfnt_version(&sfnt_version) {
+            return None;
+        }
         let num_tables = s.read()?;
         let search_range = s.read()?;
         let entry_selector = s.read()?;
