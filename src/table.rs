@@ -64,10 +64,13 @@ impl<'a> Collection<'a> {
     }
 }
 
-pub fn is_ttc(data: &[u8]) -> Option<bool> {
+pub fn is_ttc(data: &[u8]) -> bool {
+    const COLLECTION: Tag = Tag::from_be_bytes(*b"ttcf");
     let mut s = Stream::new(data);
-    let tag: Tag = s.read()?;
-    Some(tag == Tag::from_be_bytes(*b"ttcf"))
+    match s.read::<Tag>() {
+        Some(tag) => tag == COLLECTION,
+        None => false,
+    }
 }
 
 fn check_sfnt_version(sfnt_version: &Tag) {
