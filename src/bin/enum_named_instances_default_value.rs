@@ -46,7 +46,7 @@ fn main() {
         let mut buf = Vec::new();
         file.read_to_end(&mut buf).unwrap();
 
-        if is_ttc(&buf).unwrap() {
+        if is_ttc(&buf) {
         } else {
             callback(&Table::new(&buf).unwrap()).unwrap();
         }

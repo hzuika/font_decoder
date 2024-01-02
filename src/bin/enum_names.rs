@@ -24,7 +24,7 @@ fn main() {
         let mut buffer = Vec::new();
         file.read_to_end(&mut buffer).unwrap();
 
-        if is_ttc(&buffer).unwrap() {
+        if is_ttc(&buffer) {
             let collection = Collection::new(&buffer).unwrap();
             for i in 0..collection.header.numFonts as usize {
                 callback(&collection.get(i).unwrap())

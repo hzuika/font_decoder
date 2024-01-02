@@ -17,7 +17,7 @@ fn main() {
         let mut file = std::fs::File::open(filepath).unwrap();
         let mut buf = vec![];
         file.read_to_end(&mut buf).unwrap();
-        if is_ttc(&buf).unwrap() {
+        if is_ttc(&buf) {
         } else {
             callback(&Table::new(&buf).unwrap());
         }
