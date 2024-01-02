@@ -272,12 +272,41 @@ impl<'a> LookupList<'a> {
 }
 
 #[derive(Debug)]
+pub enum GsubLookupType {
+    Single = 1,                // (format 1.1 1.2) Replace one glyph with one glyph
+    Multiple = 2,              // (format 2.1) Replace one glyph with more than one glyph
+    Alternate = 3,             // (format 3.1) Replace one glyph with one of many glyphs
+    Ligature = 4,              // (format 4.1) Replace multiple glyphs with one glyph
+    Context = 5,               // (format 5.1 5.2 5.3) Replace one or more glyphs in context
+    ChainingContext = 6,       // (format 6.1 6.2 6.3) Replace one or more glyphs in chained context
+    ExtensionSubstitution = 7, // (format 7.1) Extension mechanism for other substitutions (i.e. this excludes the Extension type substitution itself)
+    ReverseChainingContextSingle = 8, // (format 8.1)
+                               // Reserved, For future use (set to zero)
+}
+
+impl GsubLookupType {
+    pub fn new(lookup_type: u16) -> Self {
+        match lookup_type {
+            1 => Self::Single,
+            2 => Self::Multiple,
+            3 => Self::Alternate,
+            4 => Self::Ligature,
+            5 => Self::Context,
+            6 => Self::ChainingContext,
+            7 => Self::ExtensionSubstitution,
+            8 => Self::ReverseChainingContextSingle,
+            _ => panic!("invalid lookup type"),
+        }
+    }
+}
+
+#[derive(Debug)]
 #[allow(non_snake_case)]
 pub struct Lookup<'a> {
     pub data: &'a [u8],
-    pub lookupType: uint16,    // Different enumerations for GSUB and GPOS
-    pub lookupFlag: uint16,    // Lookup qualifiers
-    pub subTableCount: uint16, // Number of subtables for this lookup
+    pub lookupType: GsubLookupType, // Different enumerations for GSUB and GPOS
+    pub lookupFlag: uint16,         // Lookup qualifiers
+    pub subTableCount: uint16,      // Number of subtables for this lookup
     pub subTableOffsets: Vec<Offset16>, // Array of offsets to lookup subtables, from beginning of Lookup table
     pub markFilteringSet: uint16, // Index (base 0) into GDEF mark glyph sets structure. This field is only present if the USE_MARK_FILTERING_SET lookup flag is set.
 }
@@ -286,7 +315,7 @@ impl<'a> Lookup<'a> {
     #[allow(non_snake_case)]
     pub fn parse(data: &'a [u8]) -> Option<Self> {
         let mut s = Stream::new(data);
-        let lookupType = s.read()?;
+        let lookupType = GsubLookupType::new(s.read()?);
         let lookupFlag = s.read()?;
         let subTableCount: u16 = s.read()?;
         let subTableOffsets = s.read_array(subTableCount as _)?;
@@ -298,6 +327,161 @@ impl<'a> Lookup<'a> {
             subTableCount,
             subTableOffsets,
             markFilteringSet,
+        })
+    }
+}
+
+#[derive(Debug)]
+#[allow(non_snake_case)]
+pub struct ChainedSequenceContextFormat1 {
+    pub format: uint16,                          // Format identifier: format = 1
+    pub coverageOffset: Offset16, // Offset to Coverage table, from beginning of ChainSequenceContextFormat1 table
+    pub chainedSeqRuleSetCount: uint16, // Number of ChainedSequenceRuleSet tables
+    pub chainedSeqRuleSetOffsets: Vec<Offset16>, // [chainedSeqRuleSetCount] Array of offsets to ChainedSeqRuleSet tables, from beginning of ChainedSequenceContextFormat1 table (may be NULL)
+}
+
+#[derive(Debug)]
+#[allow(non_snake_case)]
+pub struct ChainedSequenceContextFormat2 {
+    pub format: uint16,                               // Format identifier: format = 2
+    pub coverageOffset: Offset16, // Offset to Coverage table, from beginning of ChainedSequenceContextFormat2 table
+    pub backtrackClassDefOffset: Offset16, // Offset to ClassDef table containing backtrack sequence context, from beginning of ChainedSequenceContextFormat2 table
+    pub inputClassDefOffset: Offset16, // Offset to ClassDef table containing input sequence context, from beginning of ChainedSequenceContextFormat2 table
+    pub lookaheadClassDefOffset: Offset16, // Offset to ClassDef table containing lookahead sequence context, from beginning of ChainedSequenceContextFormat2 table
+    pub chainedClassSeqRuleSetCount: uint16, // Number of ChainedClassSequenceRuleSet tables
+    pub chainedClassSeqRuleSetOffsets: Vec<Offset16>, // [chainedClassSeqRuleSetCount] Array of offsets to ChainedClassSequenceRuleSet tables, from beginning of ChainedSequenceContextFormat2 table (may be NULL)
+}
+
+#[derive(Debug)]
+#[allow(non_snake_case)]
+pub struct SequenceLookupRecord {
+    pub sequenceIndex: uint16, // Index (zero-based) into the input glyph sequence
+    pub lookupListIndex: uint16, // Index (zero-based) into the LookupList
+}
+
+impl FromData for SequenceLookupRecord {
+    const SIZE: usize = uint16::SIZE * 2;
+    #[allow(non_snake_case)]
+    fn parse(data: &[u8]) -> Option<Self> {
+        let mut s = Stream::new(data);
+        let sequenceIndex = s.read()?;
+        let lookupListIndex = s.read()?;
+        Some(Self {
+            sequenceIndex,
+            lookupListIndex,
+        })
+    }
+}
+
+#[derive(Debug)]
+#[allow(non_snake_case)]
+pub struct ChainedSequenceContextFormat3<'a> {
+    pub data: &'a [u8],
+    pub format: uint16,                          // Format identifier: format = 3
+    pub backtrackGlyphCount: uint16,             // Number of glyphs in the backtrack sequence
+    pub backtrackCoverageOffsets: Vec<Offset16>, // [backtrackGlyphCount] Array of offsets to coverage tables for the backtrack sequence
+    pub inputGlyphCount: uint16,                 // Number of glyphs in the input sequence
+    pub inputCoverageOffsets: Vec<Offset16>, // [inputGlyphCount] Array of offsets to coverage tables for the input sequence
+    pub lookaheadGlyphCount: uint16,         // Number of glyphs in the lookahead sequence
+    pub lookaheadCoverageOffsets: Vec<Offset16>, // [lookaheadGlyphCount] Array of offsets to coverage tables for the lookahead sequence
+    pub seqLookupCount: uint16,                  // Number of SequenceLookupRecords
+    pub seqLookupRecords: Vec<SequenceLookupRecord>, // [seqLookupCount] Array of SequenceLookupRecords
+}
+
+impl<'a> ChainedSequenceContextFormat3<'a> {
+    #[allow(non_snake_case)]
+    pub fn parse(data: &'a [u8]) -> Option<Self> {
+        let mut s = Stream::new(data);
+        let format = s.read()?;
+        let backtrackGlyphCount: u16 = s.read()?;
+        let backtrackCoverageOffsets = s.read_array(backtrackGlyphCount as usize)?;
+        let inputGlyphCount: u16 = s.read()?;
+        let inputCoverageOffsets = s.read_array(inputGlyphCount as usize)?;
+        let lookaheadGlyphCount: u16 = s.read()?;
+        let lookaheadCoverageOffsets = s.read_array(lookaheadGlyphCount as usize)?;
+        let seqLookupCount: u16 = s.read()?;
+        let seqLookupRecords = s.read_array(seqLookupCount as usize)?;
+        Some(Self {
+            data,
+            format,
+            backtrackGlyphCount,
+            backtrackCoverageOffsets,
+            inputGlyphCount,
+            inputCoverageOffsets,
+            lookaheadGlyphCount,
+            lookaheadCoverageOffsets,
+            seqLookupCount,
+            seqLookupRecords,
+        })
+    }
+}
+
+#[derive(Debug)]
+#[allow(non_snake_case)]
+pub struct CoverageFormat1 {
+    pub coverageFormat: uint16,  // Format identifier — format = 1
+    pub glyphCount: uint16,      // Number of glyphs in the glyph array
+    pub glyphArray: Vec<uint16>, // [glyphCount] Array of glyph IDs — in numerical order
+}
+
+impl CoverageFormat1 {
+    #[allow(non_snake_case)]
+    pub fn parse(data: &[u8]) -> Option<Self> {
+        let mut s = Stream::new(data);
+        let coverageFormat = s.read()?;
+        let glyphCount: u16 = s.read()?;
+        let glyphArray = s.read_array(glyphCount as usize)?;
+        Some(Self {
+            coverageFormat,
+            glyphCount,
+            glyphArray,
+        })
+    }
+}
+
+#[derive(Debug)]
+#[allow(non_snake_case)]
+pub struct CoverageFormat2 {
+    pub coverageFormat: uint16,         // Format identifier — format = 2
+    pub rangeCount: uint16,             // Number of RangeRecords
+    pub rangeRecords: Vec<RangeRecord>, // [rangeCount] Array of glyph ranges — ordered by startGlyphID.
+}
+
+impl CoverageFormat2 {
+    #[allow(non_snake_case)]
+    pub fn parse(data: &[u8]) -> Option<Self> {
+        let mut s = Stream::new(data);
+        let coverageFormat = s.read()?;
+        let rangeCount: u16 = s.read()?;
+        let rangeRecords = s.read_array(rangeCount as usize)?;
+        Some(Self {
+            coverageFormat,
+            rangeCount,
+            rangeRecords,
+        })
+    }
+}
+
+#[derive(Debug)]
+#[allow(non_snake_case)]
+pub struct RangeRecord {
+    pub startGlyphID: uint16,       // First glyph ID in the range
+    pub endGlyphID: uint16,         // Last glyph ID in the range
+    pub startCoverageIndex: uint16, // Coverage Index of first glyph ID in range
+}
+
+impl FromData for RangeRecord {
+    const SIZE: usize = u16::SIZE * 3;
+    #[allow(non_snake_case)]
+    fn parse(data: &[u8]) -> Option<Self> {
+        let mut s = Stream::new(data);
+        let startGlyphID = s.read()?;
+        let endGlyphID = s.read()?;
+        let startCoverageIndex = s.read()?;
+        Some(Self {
+            startGlyphID,
+            endGlyphID,
+            startCoverageIndex,
         })
     }
 }
